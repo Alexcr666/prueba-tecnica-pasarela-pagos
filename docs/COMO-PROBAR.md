@@ -8,6 +8,8 @@ cd ~/Documents/prueba-gelsa-pagos
 
 ## 0. Encender Docker (una vez por sesión)
 
+Con Docker Desktop basta con tenerlo abierto. En macOS con Colima:
+
 ```bash
 colima start
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
@@ -56,7 +58,7 @@ WEBHOOK_SECRETS=dev-secret ./mvnw spring-boot:run
 
 Espera a ver `Started PaymentServiceApplication`.
 
-> **Si el puerto 8080 está ocupado** (por ejemplo, por el emulador de Firebase de otro proyecto), usa otro:
+> **Si el puerto 8080 está ocupado** por otra aplicación, usa otro:
 > `SERVER_PORT=8081 WEBHOOK_SECRETS=dev-secret ./mvnw spring-boot:run` y en la otra terminal `export API=http://localhost:8081` antes de correr los scripts.
 
 **Terminal 2**: corre la demo.
