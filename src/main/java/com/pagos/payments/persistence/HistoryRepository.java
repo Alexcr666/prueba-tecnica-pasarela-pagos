@@ -2,12 +2,19 @@ package com.pagos.payments.persistence;
 
 import com.pagos.payments.domain.PaymentStatus;
 import com.pagos.payments.domain.TransitionSource;
+import java.time.Instant;
+import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /** Historial de transiciones de solo inserción: permite reconstruir el ciclo de vida. */
 @Repository
 public class HistoryRepository {
+
+    /** Una transición del ciclo de vida, tal como quedó registrada. */
+    public record Entry(String fromStatus, String toStatus, String source, String correlationId, String detail,
+                        Instant occurredAt) {
+    }
 
     private final JdbcClient jdbc;
 
@@ -27,6 +34,17 @@ public class HistoryRepository {
                 .param("source", source.name()).param("eventRef", providerEventRef)
                 .param("correlationId", correlationId).param("detail", detail)
                 .update();
+    }
+
+    public List<Entry> findByAttempt(String attemptId) {
+        return jdbc.sql("""
+                SELECT from_status, to_status, source, correlation_id, detail, occurred_at
+                  FROM payment_status_history WHERE attempt_id = :id ORDER BY id
+                """)
+                .param("id", attemptId)
+                .query((rs, n) -> new Entry(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
+                        rs.getString(5), Db.toInstant(rs.getTimestamp(6))))
+                .list();
     }
 
     public int countForAttempt(String attemptId) {

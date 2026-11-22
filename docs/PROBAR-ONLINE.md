@@ -2,31 +2,36 @@
 
 Todo corre en el navegador: Oracle Free, RabbitMQ, una pasarela de pagos simulada y el servicio. No hay que instalar nada.
 
-## 1. Levantar el entorno
+## 1. Esperar a que todo arranque
 
-En la terminal de abajo:
+Al abrir el Codespace, el entorno se levanta solo (Oracle, RabbitMQ, la pasarela simulada, el servicio y la consola). Tarda 2 o 3 minutos. Si quieres verlo o relanzarlo, en la terminal:
 
 ```bash
 ./scripts/iniciar.sh
 ```
 
-Tarda 1 o 2 minutos: espera a Oracle y arranca el servicio. Termina con **"Todo arriba"**. Se puede repetir sin problema.
+Termina con **"Todo arriba"**. Se puede repetir sin problema.
 
-## 2. Ejecutar las demos
+## 2. Abrir la consola de la prueba
 
-Cada script imprime lo que hace y marca con ✔ lo que verifica.
+Pestaña **PORTS** (junto a la terminal) → puerto **8090 · Consola de la prueba** → ícono del globo 🌐.
 
-| Comando | Qué demuestra | Tiempo |
-| --- | --- | --- |
-| `./scripts/demo.sh` | Flujo completo: idempotencia de la API, doble clic bloqueado (409), firma inválida (401), webhook duplicado sin efecto, evento fuera de orden ignorado | 10 s |
-| `./scripts/demo-timeout.sh` | La pasarela tarda más que el timeout: el pago queda `UNKNOWN`, no se reintenta el cobro y la conciliación lo resuelve sola | 1 min |
-| `./scripts/demo-liquidacion.sh` | Conciliación diaria contra el archivo del proveedor: los 3 tipos de discrepancia, corrección automática e idempotencia | 15 s |
+La consola recorre con botones los tres escenarios del enunciado. Cada paso explica qué hace y por qué importa, y muestra la petición, la respuesta y el historial guardado en Oracle:
+
+| Escenario | Qué demuestra |
+| --- | --- |
+| 1 · Pago y duplicados | Idempotencia de la API, doble clic bloqueado (409), firma falsa rechazada (401), webhook duplicado sin efecto, evento fuera de orden ignorado y eventos publicados en RabbitMQ |
+| 2 · Timeout | La pasarela no responde a tiempo: el pago queda `UNKNOWN`, no se reintenta el cobro y la conciliación lo resuelve sola |
+| 3 · Conciliación diaria | Archivo de liquidación con diferencias: corrección automática, los 3 tipos de discrepancia e idempotencia |
+
+Pulsa **▶ Ejecutar toda la prueba** en el inicio, o ejecuta cada paso con su botón. La pestaña **Eventos publicados** muestra lo que llegó a RabbitMQ.
+
+También se puede desde la terminal: `./scripts/demo.sh`, `./scripts/demo-timeout.sh` y `./scripts/demo-liquidacion.sh`.
 
 ## 3. Mirar por dentro
 
 Abre la pestaña **PORTS** (junto a la terminal) y pulsa el ícono del globo en:
 
-- **8090 · Visor de eventos:** los eventos publicados en RabbitMQ, con el JSON en árbol desplegable.
 - **15672 · RabbitMQ:** consola del broker (usuario `guest`, clave `guest`).
 - **8080 · API del servicio:** `/actuator/health`, `/actuator/prometheus`.
 

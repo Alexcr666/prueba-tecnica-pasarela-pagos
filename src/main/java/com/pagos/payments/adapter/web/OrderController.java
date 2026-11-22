@@ -6,6 +6,7 @@ import com.pagos.payments.application.PaymentInitiationService;
 import com.pagos.payments.domain.PaymentAttempt;
 import com.pagos.payments.domain.PaymentStatus;
 import com.pagos.payments.persistence.OrderRepository.OrderRow;
+import com.pagos.payments.persistence.HistoryRepository;
 import com.pagos.payments.persistence.PaymentAttemptRepository;
 import com.pagos.payments.support.Hashing;
 import jakarta.validation.Valid;
@@ -13,6 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,21 +36,25 @@ public class OrderController {
         }
     }
 
-    public record PaymentResponse(String attemptId, String orderId, String status, String redirectUrl,
-                                  String statusReason) {
+    public record PaymentResponse(String attemptId, String orderId, String status, String providerPaymentId,
+                                  String redirectUrl, String statusReason) {
         static PaymentResponse of(PaymentAttempt a) {
-            return new PaymentResponse(a.id(), a.orderId(), a.status().name(), a.redirectUrl(), a.statusReason());
+            return new PaymentResponse(a.id(), a.orderId(), a.status().name(), a.providerPaymentId(),
+                    a.redirectUrl(), a.statusReason());
         }
     }
 
     private final OrderService orders;
     private final PaymentInitiationService payments;
     private final PaymentAttemptRepository attempts;
+    private final HistoryRepository history;
 
-    public OrderController(OrderService orders, PaymentInitiationService payments, PaymentAttemptRepository attempts) {
+    public OrderController(OrderService orders, PaymentInitiationService payments, PaymentAttemptRepository attempts,
+                           HistoryRepository history) {
         this.orders = orders;
         this.payments = payments;
         this.attempts = attempts;
+        this.history = history;
     }
 
     @PostMapping("/orders")
@@ -85,5 +91,12 @@ public class OrderController {
     @GetMapping("/payments/{attemptId}")
     public PaymentResponse payment(@PathVariable String attemptId) {
         return PaymentResponse.of(attempts.findById(attemptId).orElseThrow(() -> ApiException.notFound("El pago")));
+    }
+
+    /** Ciclo de vida completo del intento: cada transición con su origen, motivo y correlation_id. */
+    @GetMapping("/payments/{attemptId}/history")
+    public List<HistoryRepository.Entry> history(@PathVariable String attemptId) {
+        attempts.findById(attemptId).orElseThrow(() -> ApiException.notFound("El pago"));
+        return history.findByAttempt(attemptId);
     }
 }

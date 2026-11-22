@@ -93,7 +93,7 @@ SELECT event_type, status FROM outbox_event ORDER BY created_at;
 ```
 
 **Otras vistas:**
-- **Visor de eventos (recomendado):** `python3 scripts/visor-eventos.py` y abre http://localhost:8090. Crea la cola de demo si no existe y muestra cada evento como tarjeta (tipo, transición, monto), con el JSON en árbol desplegable (pestaña *Viewer*) o formateado con colores (pestaña *Text*), filtro y botón para copiar. Lee sin consumir los mensajes.
+- **Consola de la prueba (recomendado):** `API_URL=http://localhost:8080 python3 scripts/consola.py` y abre http://localhost:8090. Recorre los escenarios con botones y explica cada paso; la sección *Eventos publicados* muestra el JSON de cada evento en árbol desplegable. `./scripts/iniciar.sh` la levanta junto con todo lo demás.
 - **RabbitMQ:** http://localhost:15672 (usuario `guest`, clave `guest`). El exchange `payments.events` recibe los eventos. El servicio no declara colas (cada consumidor crea la suya), así que para verlos crea una cola de demo enlazada con `#`:
   ```bash
   curl -s -u guest:guest -X PUT localhost:15672/api/queues/%2F/demo.consumidor -H 'content-type: application/json' -d '{"durable":true,"arguments":{"x-queue-type":"quorum"}}'

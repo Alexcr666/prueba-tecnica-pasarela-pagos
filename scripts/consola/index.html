@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consola de la prueba técnica</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%233056d3%22/%3E%3Ctext x=%2216%22 y=%2223%22 font-size=%2219%22 text-anchor=%22middle%22 fill=%22white%22 font-family=%22Arial%22%3E%E2%82%B1%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --panel-2:#f9fafb; --fg:#161b26; --muted:#5d6676; --faint:#8a93a3;
+  --line:#e3e6ec; --line-2:#eef0f4; --accent:#3056d3; --accent-2:#e9eefc; --accent-fg:#ffffff;
+  --ok:#11845b; --ok-bg:#e3f5ec; --bad:#c2352b; --bad-bg:#fcebe9; --warn:#a35f00; --warn-bg:#fdf1dc;
+  --info:#6941c6; --info-bg:#f1ebfd; --neutral-bg:#eef0f4;
+  --code-bg:#f3f4f7; --key:#7c2d92; --str:#0f7b3f; --num:#1d4ed8; --bool:#b45309; --null:#8a93a3;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+  --radius:12px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0e1117; --panel:#161b22; --panel-2:#1b212a; --fg:#e7eaf0; --muted:#a0a8b5; --faint:#727c8b;
+  --line:#2a313c; --line-2:#222831; --accent:#6d8dff; --accent-2:#1d2540; --accent-fg:#0e1117;
+  --ok:#3fcf8e; --ok-bg:#12291f; --bad:#ff7b72; --bad-bg:#301716; --warn:#f2b45a; --warn-bg:#2e2310;
+  --info:#b39dfa; --info-bg:#231c3a; --neutral-bg:#222831;
+  --code-bg:#11151c; --key:#d8a4f0; --str:#7ed69c; --num:#8ab4ff; --bool:#f5b56b; --null:#6b7280;
+  --shadow:none;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+a{color:var(--accent)}
+
+/* Barra superior */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;padding:12px 24px;
+  background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em}
+.logo{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-size:15px}
+.brand small{display:block;font-weight:500;color:var(--muted);font-size:12px;margin-top:-2px}
+.health{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel);font-size:12px;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.dot.up{background:var(--ok)} .dot.down{background:var(--bad)}
+
+/* Estructura */
+.layout{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:calc(100vh - 57px)}
+nav{border-right:1px solid var(--line);padding:20px 14px;position:sticky;top:57px;height:calc(100vh - 57px);overflow:auto}
+.navlabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin:6px 10px 8px}
+.navitem{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;color:var(--fg);
+  padding:9px 10px;border-radius:9px;margin-bottom:2px}
+.navitem:hover{background:var(--line-2)}
+.navitem.on{background:var(--accent-2);color:var(--accent);font-weight:600}
+.navnum{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:650;
+  background:var(--neutral-bg);color:var(--muted);flex:none}
+.navitem.on .navnum{background:var(--accent);color:var(--accent-fg)}
+.navprog{margin-left:auto;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.navprog.done{color:var(--ok);font-weight:600}
+.navfoot{margin:18px 10px 0;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+main{padding:28px 32px 80px;min-width:0}
+
+/* Encabezado de escenario */
+.hero{display:flex;gap:24px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px}
+.eyebrow{font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+h1{font-size:26px;line-height:1.2;letter-spacing:-.02em;margin:6px 0 8px}
+.lead{color:var(--muted);max-width:720px;margin:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:8px 14px;border-radius:9px;font-weight:550;
+  display:inline-flex;align-items:center;gap:8px;box-shadow:var(--shadow)}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
+.btn.sm{padding:6px 11px;font-size:13px}
+.ps{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 22px}
+.ps div{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
+.ps h4{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.ps .p h4{color:var(--bad)} .ps .s h4{color:var(--ok)}
+.ps p{margin:0;color:var(--muted)}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+
+/* Pasos */
+.step{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:12px;box-shadow:var(--shadow);
+  transition:border-color .2s}
+.step.running{border-color:var(--accent)}
+.step.ok{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.step.fail{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+.shead{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.badge-n{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:650;font-size:13px;flex:none;
+  background:var(--neutral-bg);color:var(--muted)}
+.step.running .badge-n{background:var(--accent-2);color:var(--accent)}
+.step.ok .badge-n{background:var(--ok-bg);color:var(--ok)}
+.step.fail .badge-n{background:var(--bad-bg);color:var(--bad)}
+.stitle{font-weight:620;letter-spacing:-.005em}
+.sexpect{font-size:12.5px;color:var(--muted)}
+.shead .btn{margin-left:auto;flex:none}
+.sbody{padding:0 16px 14px 58px}
+.what{margin:0 0 8px;color:var(--fg)}
+.why{margin:0;padding:9px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--muted);font-size:13px}
+.why b{color:var(--fg);font-weight:600}
+.result{margin-top:12px;display:none}
+.step.ran .result{display:block}
+.verdict{display:flex;gap:8px;align-items:flex-start;padding:9px 12px;border-radius:8px;font-weight:550;margin-bottom:8px;font-size:13.5px}
+.verdict.ok{background:var(--ok-bg);color:var(--ok)}
+.verdict.fail{background:var(--bad-bg);color:var(--bad)}
+.verdict.run{background:var(--accent-2);color:var(--accent)}
+.calls{border:1px solid var(--line-2);border-radius:8px;overflow:hidden}
+.call{border-top:1px solid var(--line-2)}
+.call:first-child{border-top:0}
+.call>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:13px}
+.call>summary::-webkit-details-marker{display:none}
+.call>summary:hover{background:var(--panel-2)}
+.m{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:5px;background:var(--neutral-bg);color:var(--muted);min-width:44px;text-align:center}
+.m.POST{color:var(--accent);background:var(--accent-2)}
+.path{font-family:var(--mono);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.lbl{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.code{font-family:var(--mono);font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:999px}
+.c2{background:var(--ok-bg);color:var(--ok)} .c4{background:var(--warn-bg);color:var(--warn)} .c5{background:var(--bad-bg);color:var(--bad)}
+.ms{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
+.callbody{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 12px 12px}
+.callbody h5{margin:4px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+pre.json{margin:0;padding:10px 12px;background:var(--code-bg);border-radius:8px;overflow:auto;max-height:320px;
+  font-family:var(--mono);font-size:12px;line-height:1.5}
+.k{color:var(--key)} .s{color:var(--str)} .n{color:var(--num)} .b{color:var(--bool)} .z{color:var(--null)}
+.extra{margin-top:10px}
+.spinner{width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.bar{height:6px;background:var(--line-2);border-radius:99px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+
+/* Tablas */
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+.t th{text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;
+  padding:7px 10px;border-bottom:1px solid var(--line)}
+.t td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:top}
+.t tr:last-child td{border-bottom:0}
+.t .num{text-align:right;font-variant-numeric:tabular-nums}
+.tablebox{border:1px solid var(--line-2);border-radius:8px;overflow:auto}
+
+/* Estados */
+.st{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:650;
+  letter-spacing:.02em;background:var(--neutral-bg);color:var(--muted);white-space:nowrap}
+.st.APPROVED,.st.PAID,.st.AUTO_FIXED{background:var(--ok-bg);color:var(--ok)}
+.st.PENDING,.st.AWAITING_PAYMENT{background:var(--warn-bg);color:var(--warn)}
+.st.UNKNOWN,.st.REQUIRES_REVIEW,.st.OPEN{background:var(--info-bg);color:var(--info)}
+.st.DECLINED,.st.FAILED,.st.CANCELLED{background:var(--bad-bg);color:var(--bad)}
+.src{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--neutral-bg);color:var(--muted)}
+.src.WEBHOOK{color:var(--accent);background:var(--accent-2)}
+.src.RECONCILIATION{color:var(--info);background:var(--info-bg)}
+.src.SETTLEMENT{color:var(--ok);background:var(--ok-bg)}
+
+/* Panel de la transacción */
+.side{position:sticky;top:77px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.card h3{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:center;gap:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;align-items:center}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--faint);font-size:13px;text-align:center;padding:14px 4px}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{position:relative;padding:0 0 14px 22px}
+.tl li:before{content:"";position:absolute;left:5px;top:16px;bottom:-2px;width:2px;background:var(--line)}
+.tl li:last-child:before{display:none}
+.tl li:after{content:"";position:absolute;left:0;top:5px;width:12px;height:12px;border-radius:50%;background:var(--panel);border:2px solid var(--accent)}
+.tl .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tl .meta{font-size:11.5px;color:var(--faint);margin-top:3px}
+.arrow{color:var(--faint)}
+.mini{display:flex;gap:6px;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:13px;cursor:pointer}
+.mini:last-child{border-bottom:0}
+.mini b{width:20px}
+.mini.sel b{color:var(--accent)}
+
+/* Inicio */
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
+.sc{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px}
+.sc h3{margin:0;font-size:16px;letter-spacing:-.01em}
+.sc p{margin:0;color:var(--muted);flex:1}
+.sc .tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--neutral-bg);color:var(--muted)}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.node{padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);font-size:13px;font-weight:550}
+.node small{display:block;color:var(--muted);font-weight:400;font-size:11.5px}
+.node.core{border-color:var(--accent);background:var(--accent-2)}
+.guar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.guar>div{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px}
+.guar i{font-style:normal;color:var(--ok);font-weight:700}
+.guar b{display:block}
+.guar span{color:var(--muted)}
+
+/* Eventos */
+.ev{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;box-shadow:var(--shadow)}
+.ev>summary{list-style:none;display:flex;gap:10px;align-items:center;padding:10px 14px;cursor:pointer;flex-wrap:wrap}
+.ev>summary::-webkit-details-marker{display:none}
+.evt{font-weight:650}
+.evt.PaymentStatusChanged{color:var(--accent)} .evt.OrderPaid{color:var(--ok)} .evt.RefundRequired{color:var(--bad)} .evt.PaymentNeedsReview{color:var(--warn)}
+.ev .body{padding:0 14px 14px}
+.tabs{display:flex;gap:4px;margin-bottom:8px}
+.tab{border:1px solid var(--line);background:var(--panel);padding:3px 10px;border-radius:7px;font-size:12px}
+.tab.on{background:var(--accent-2);color:var(--accent);border-color:transparent;font-weight:600}
+.tree,.tree ul{list-style:none;margin:0;padding-left:18px;font-family:var(--mono);font-size:12px}
+.tree{padding:10px 12px;background:var(--code-bg);border-radius:8px}
+.tree ul{border-left:1px dashed var(--line)}
+.tg{cursor:pointer;color:var(--faint);user-select:none;display:inline-block;width:14px}
+.closed>ul{display:none}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.input{border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:9px;padding:7px 12px;font:inherit;min-width:260px}
+.hint{font-size:12.5px;color:var(--muted)}
+.hide{display:none!important}
+
+@media (max-width:1100px){.cols{grid-template-columns:1fr}.side{position:static}.grid3{grid-template-columns:1fr}}
+@media (max-width:760px){.layout{grid-template-columns:1fr}nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+  main{padding:20px 16px 60px}.ps,.guar,.callbody{grid-template-columns:1fr}.sbody{padding-left:16px}.health{display:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><div class="logo">₱</div><div>Pasarela de pagos asíncrona<small>Consola de la prueba técnica</small></div></div>
+  <div class="health" id="health"></div>
+</header>
+<div class="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+
+<script>
+/* ============================================================== utilidades */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const short = id => id ? '…' + String(id).slice(-8) : '—';
+const money = n => n == null ? '—' : Number(n).toLocaleString('es-CO') + ' COP';
+const today = () => new Date().toISOString().slice(0, 10);
+const st = s => s ? `<span class="st ${esc(s)}">${esc(s)}</span>` : '<span class="st">—</span>';
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} :
+    {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+function jsonHtml(o) {
+  if (o === undefined) return '<span class="z">(sin cuerpo)</span>';
+  return esc(JSON.stringify(o, null, 2)).replace(
+    /(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?/g,
+    (m, str, colon, bool) => str ? (colon ? `<span class="k">${str}</span>${colon}` : `<span class="s">${str}</span>`)
+      : bool ? `<span class="b">${m}</span>` : m === 'null' ? '<span class="z">null</span>' : `<span class="n">${m}</span>`);
+}
+function treeHtml(v, key) {
+  const k = key === undefined ? '' : `<span class="k">"${esc(key)}"</span>: `;
+  if (v !== null && typeof v === 'object') {
+    const arr = Array.isArray(v), e = arr ? v.map((x, i) => [i, x]) : Object.entries(v);
+    return `<li><span class="tg" onclick="const l=this.parentNode;l.classList.toggle('closed');this.textContent=l.classList.contains('closed')?'▸':'▾'">▾</span>${k}${arr ? '[' : '{'}<ul>${
+      e.map(([kk, vv]) => treeHtml(vv, arr ? undefined : kk)).join('')}</ul>${arr ? ']' : '}'}</li>`;
+  }
+  const cls = v === null ? 'z' : typeof v === 'string' ? 's' : typeof v === 'number' ? 'n' : 'b';
+  return `<li>${k}<span class="${cls}">${esc(typeof v === 'string' ? '"' + v + '"' : v)}</span></li>`;
+}
+
+/* ===================================================== llamadas registradas */
+// Cada llamada queda registrada en el paso que la hizo, con petición y respuesta completas.
+function recorder(step) {
+  return {
+    async svc(method, path, body, key, label) {
+      const r = await api('/api/service', {method, path, body, headers: key ? {'Idempotency-Key': key} : {}});
+      step.calls.push({label, method, path, key, req: body, status: r.status, res: r.body, ms: r.ms});
+      renderStep(step);
+      return r;
+    },
+    async hook(args, label) {
+      const r = await api('/api/webhook', args);
+      step.calls.push({label, method: 'POST', path: '/webhooks/DEMO', req: r.request.body, reqHeaders: r.request.headers,
+        status: r.status, res: r.body, ms: r.ms});
+      renderStep(step);
+      return r;
+    },
+    async tool(path, body, label, show) {
+      const r = await api(path, body || {});
+      step.calls.push({label, method: 'POST', path, tool: true, status: r.status || 200, res: show ?? r, ms: 0});
+      renderStep(step);
+      return r;
+    },
+    progress(text, pct) { step.live = {text, pct}; renderStep(step); },
+  };
+}
+async function waitFor(fn, ok, timeoutMs, onTick) {
+  const t0 = Date.now(); let last;
+  while (Date.now() - t0 < timeoutMs) {
+    last = await fn();
+    if (ok(last)) return {ok: true, value: last, s: Math.round((Date.now() - t0) / 1000)};
+    onTick && onTick(last, (Date.now() - t0) / timeoutMs, Math.round((Date.now() - t0) / 1000));
+    await sleep(1500);
+  }
+  return {ok: false, value: last, s: Math.round(timeoutMs / 1000)};
+}
+const getPayment = id => api('/api/service', {method: 'GET', path: '/payments/' + id}).then(r => r.body);
+const getOrder = id => api('/api/service', {method: 'GET', path: '/orders/' + id}).then(r => r.body);
+const getHistory = id => api('/api/service', {method: 'GET', path: '/payments/' + id + '/history'}).then(r => r.body || []);
+const pass = (msg, extra) => ({ok: true, msg, extra});
+const fail = (msg, extra) => ({ok: false, msg, extra});
+const ORDER = {customerId: 'cliente-demo', amountMinor: 150000, currency: 'COP'};
+
+/* ============================================================== escenarios */
+const SCENARIOS = [
+{
+  id: 'flujo', n: 1, nav: 'Pago y duplicados',
+  title: 'Pago exitoso con notificaciones duplicadas y fuera de orden',
+  lead: 'Recorre el ciclo de vida completo de una orden y su pago, y provoca los problemas típicos de una pasarela real: reintentos del cliente, doble clic, webhooks falsos, repetidos y tardíos.',
+  problem: 'La pasarela avisa por webhook, y los webhooks pueden llegar repetidos, falsificados o en desorden. El cliente puede pulsar "pagar" dos veces.',
+  solution: 'Idempotencia en cuatro capas, firma HMAC y una máquina de estados que solo avanza con UPDATE condicional en Oracle.',
+  steps: [
+    {title: 'Crear la orden', expect: 'HTTP 201 · orden AWAITING_PAYMENT',
+     what: 'El comercio crea una orden de 150.000 COP enviando una Idempotency-Key.',
+     why: '<b>Por qué importa:</b> la clave queda guardada en Oracle junto con la orden, en la misma transacción.',
+     async run(ctx, io) {
+       ctx.key = 'orden-' + uid();
+       const r = await io.svc('POST', '/orders', ORDER, ctx.key, 'Crear orden');
+       ctx.orderId = r.body?.id; track(ctx, {label: 'Pago', orderId: ctx.orderId});
+       return r.status === 201 && r.body.status === 'AWAITING_PAYMENT'
+         ? pass(`Orden ${short(ctx.orderId)} creada en AWAITING_PAYMENT.`) : fail('Se esperaba 201.');
+     }},
+    {title: 'Reintentar con la misma clave', expect: 'HTTP 200 · misma orden, sin duplicar',
+     what: 'El cliente no recibió la respuesta (por ejemplo, se cortó la red) y repite exactamente la misma petición.',
+     why: '<b>Por qué importa:</b> sin idempotencia, cada reintento crearía otra orden.',
+     async run(ctx, io) {
+       const r = await io.svc('POST', '/orders', ORDER, ctx.key, 'Repetir con la misma Idempotency-Key');
+       return r.status === 200 && r.body.id === ctx.orderId
+         ? pass('Devolvió la misma orden con 200: no se creó nada nuevo.') : fail('Se esperaba la misma orden con 200.');
+     }},
+    {title: 'Iniciar el pago', expect: 'HTTP 201 · pago PENDING + URL de redirección',
+     what: 'Se registra el intento en Oracle (commit) y luego se llama a la pasarela, que responde PENDING y la URL a la que se redirige al cliente.',
+     why: '<b>Por qué importa:</b> el intento existe antes de llamar a la pasarela. Si el servicio se cae a mitad de camino, la conciliación lo encuentra.',
+     async run(ctx, io) {
+       const r = await io.svc('POST', `/orders/${ctx.orderId}/payments`, undefined, 'pago-' + ctx.key, 'Iniciar pago');
+       ctx.attemptId = r.body?.attemptId; ctx.ppid = r.body?.providerPaymentId;
+       track(ctx, {label: 'Pago', orderId: ctx.orderId, attemptId: ctx.attemptId});
+       return r.status === 201 && r.body.status === 'PENDING'
+         ? pass(`Intento ${short(ctx.attemptId)} en PENDING; la pasarela asignó ${ctx.ppid}.`) : fail('Se esperaba 201 y PENDING.');
+     }},
+    {title: 'Doble clic en "pagar"', expect: 'HTTP 409 · bloqueado',
+     what: 'El cliente vuelve a pulsar "pagar", ahora con otra clave, mientras el primer pago sigue activo.',
+     why: '<b>Por qué importa:</b> un índice único en Oracle permite un solo intento activo por orden. Es la defensa contra el doble cobro.',
+     async run(ctx, io) {
+       const r = await io.svc('POST', `/orders/${ctx.orderId}/payments`, undefined, 'otro-' + ctx.key, 'Segundo intento');
+       return r.status === 409 ? pass('Rechazado con 409 ACTIVE_PAYMENT_EXISTS: no hay doble cobro.') : fail('Se esperaba 409.');
+     }},
+    {title: 'Webhook con firma falsa', expect: 'HTTP 401 · no se guarda nada',
+     what: 'Un atacante envía un "APPROVED" con una firma inválida para que la orden quede pagada sin pagar.',
+     why: '<b>Por qué importa:</b> la firma es un HMAC-SHA256 de "timestamp.cuerpo" con un secreto compartido. Se compara en tiempo constante y con 5 minutos de tolerancia contra reenvíos.',
+     async run(ctx, io) {
+       const r = await io.hook({eventId: 'evt-falso-' + uid(), reference: ctx.attemptId, providerPaymentId: ctx.ppid,
+         status: 'APPROVED', badSignature: true}, 'Webhook con firma alterada');
+       return r.status === 401 ? pass('Rechazado con 401 antes de tocar la base de datos.') : fail('Se esperaba 401.');
+     }},
+    {title: 'Webhook APPROVED firmado', expect: 'HTTP 200 · guardado en el inbox',
+     what: 'La pasarela confirma el pago. El servicio verifica la firma, guarda el evento en el inbox y responde enseguida.',
+     why: '<b>Por qué importa:</b> responder rápido evita reintentos de la pasarela. El efecto de negocio lo aplica después un procesador asíncrono.',
+     async run(ctx, io) {
+       ctx.evt = 'evt-' + uid();
+       const r = await io.hook({eventId: ctx.evt, reference: ctx.attemptId, providerPaymentId: ctx.ppid, status: 'APPROVED'}, 'Webhook APPROVED');
+       return r.status === 200 && r.body?.duplicate === false ? pass('Aceptado y guardado: duplicate=false.') : fail('Se esperaba 200.');
+     }},
+    {title: 'La pasarela reenvía el mismo webhook', expect: 'HTTP 200 · duplicate=true',
+     what: 'Las pasarelas reintentan las notificaciones. Llega otra vez exactamente el mismo evento.',
+     why: '<b>Por qué importa:</b> la restricción UNIQUE(provider, provider_event_id) del inbox lo detecta. Se responde 200 para que la pasarela no siga reintentando, pero no tiene ningún efecto.',
+     async run(ctx, io) {
+       const r = await io.hook({eventId: ctx.evt, reference: ctx.attemptId, providerPaymentId: ctx.ppid, status: 'APPROVED'}, 'Mismo webhook otra vez');
+       return r.status === 200 && r.body?.duplicate === true ? pass('Reconocido como duplicado: sin efectos dobles.') : fail('Se esperaba duplicate=true.');
+     }},
+    {title: 'Verificar el pago y la orden', expect: 'Pago APPROVED · orden PAID',
+     what: 'El procesador del inbox aplica el evento: el pago pasa a APPROVED y la orden a PAID, en una sola transacción con el historial y el evento de salida.',
+     why: '<b>Por qué importa:</b> aunque el webhook llegó dos veces, el historial muestra una sola aprobación.',
+     async run(ctx, io) {
+       io.progress('Esperando al procesador del inbox…');
+       const w = await waitFor(() => getPayment(ctx.attemptId), p => p?.status === 'APPROVED', 15000);
+       const o = await getOrder(ctx.orderId), h = await getHistory(ctx.attemptId);
+       const approvals = h.filter(e => e.toStatus === 'APPROVED').length;
+       ctx.historyLen = h.length;
+       return w.ok && o.status === 'PAID' && approvals === 1
+         ? pass(`Pago APPROVED y orden PAID en ${w.s} s. Una sola aprobación en el historial.`)
+         : fail(`Pago ${w.value?.status}, orden ${o.status}, aprobaciones ${approvals}.`);
+     }},
+    {title: 'Llega tarde un webhook PENDING', expect: 'Se ignora · el estado no retrocede',
+     what: 'Una notificación vieja ("PENDING") llega después de la aprobación, fuera de orden.',
+     why: '<b>Por qué importa:</b> el UPDATE solo se aplica si el estado actual permite esa transición. APPROVED → PENDING no está permitido, así que el evento queda IGNORED_STALE.',
+     async run(ctx, io) {
+       await io.hook({eventId: 'evt-viejo-' + uid(), reference: ctx.attemptId, providerPaymentId: ctx.ppid, status: 'PENDING'}, 'Webhook PENDING tardío');
+       io.progress('Esperando al procesador…'); await sleep(3500);
+       const p = await getPayment(ctx.attemptId), h = await getHistory(ctx.attemptId);
+       return p.status === 'APPROVED' && h.length === ctx.historyLen
+         ? pass('Sigue APPROVED y el historial no cambió.') : fail(`Estado ${p.status}.`);
+     }},
+    {title: 'Ver los eventos publicados', expect: '3 eventos en RabbitMQ',
+     what: 'Cada cambio de estado escribió un evento en el outbox (misma transacción). El relay los publica en RabbitMQ con confirmación del broker.',
+     why: '<b>Por qué importa:</b> Transactional Outbox: no hay forma de que el estado cambie y el evento se pierda, ni de publicar algo que no se confirmó.',
+     async run(ctx, io) {
+       io.progress('Leyendo la cola de RabbitMQ…');
+       const w = await waitFor(() => api('/api/events'), j => mine(j, ctx).length >= 3, 12000);
+       const evs = mine(w.value, ctx);
+       return evs.length >= 3 ? pass(`${evs.length} eventos publicados para esta orden.`, eventsHtml(evs))
+         : fail(`Solo llegaron ${evs.length} eventos.`, eventsHtml(evs));
+     }},
+  ]},
+{
+  id: 'timeout', n: 2, nav: 'Timeout e incertidumbre',
+  title: 'Timeout: la pasarela no responde a tiempo',
+  lead: 'La pasarela tarda más que el límite de espera. No sabemos si cobró. Así se resuelve sin cobrar dos veces y sin intervención manual.',
+  problem: 'Ante un timeout, la pasarela pudo haber cobrado. Reintentar a ciegas puede cobrar dos veces; darlo por fallido deja un cobro real sin orden.',
+  solution: 'El pago queda UNKNOWN, se bloquean nuevos intentos y la conciliación pregunta a la pasarela por la referencia hasta tener evidencia.',
+  steps: [
+    {title: 'Hacer lenta la pasarela', expect: 'Responderá en 15 s (el límite es 10 s)',
+     what: 'Se configura la pasarela simulada para que tarde 15 segundos en crear pagos.',
+     why: '<b>Por qué importa:</b> el antifraude de una pasarela real puede tardar; el servicio corta a los 10 s de lectura.',
+     async run(ctx, io) {
+       const r = await io.tool('/api/gateway/slow', {}, 'Pasarela simulada: demora de 15 s');
+       return r.status === 201 || r.status === 200 ? pass('La pasarela ahora tarda 15 s en responder.') : fail('No se pudo configurar la pasarela.');
+     }},
+    {title: 'Crear la orden', expect: 'HTTP 201',
+     what: 'Una orden nueva de 150.000 COP.', why: '<b>Por qué importa:</b> partimos de un estado limpio.',
+     async run(ctx, io) {
+       ctx.key = 'timeout-' + uid();
+       const r = await io.svc('POST', '/orders', ORDER, ctx.key, 'Crear orden');
+       ctx.orderId = r.body?.id; track(ctx, {label: 'Pago', orderId: ctx.orderId});
+       return r.status === 201 ? pass(`Orden ${short(ctx.orderId)} creada.`) : fail('Se esperaba 201.');
+     }},
+    {title: 'Pagar y esperar', expect: 'Corta a los 10 s · HTTP 202 · UNKNOWN',
+     what: 'El servicio llama a la pasarela y espera como máximo 10 segundos.',
+     why: '<b>Por qué importa:</b> un timeout de lectura NO es un fallo: es "no sé". El pago queda UNKNOWN y el cliente recibe 202 (aceptado, en proceso).',
+     async run(ctx, io) {
+       const t0 = Date.now();
+       const tick = setInterval(() => io.progress(`Esperando a la pasarela… ${Math.round((Date.now() - t0) / 1000)} s`,
+         Math.min(1, (Date.now() - t0) / 10000)), 500);
+       let r; try { r = await io.svc('POST', `/orders/${ctx.orderId}/payments`, undefined, 'pago-' + ctx.key, 'Iniciar pago'); }
+       finally { clearInterval(tick); }
+       ctx.attemptId = r.body?.attemptId; track(ctx, {label: 'Pago', orderId: ctx.orderId, attemptId: ctx.attemptId});
+       return r.status === 202 && r.body.status === 'UNKNOWN'
+         ? pass(`Cortó a los ${Math.round(r.ms / 1000)} s: pago UNKNOWN (${r.body.statusReason}).`) : fail('Se esperaba 202 y UNKNOWN.');
+     }},
+    {title: 'El cliente intenta pagar de nuevo', expect: 'HTTP 409 · bloqueado',
+     what: 'Impaciente, el cliente vuelve a pulsar "pagar" mientras el resultado es incierto.',
+     why: '<b>Por qué importa:</b> UNKNOWN cuenta como intento activo. Mejor esperar unos segundos que arriesgar un doble cobro.',
+     async run(ctx, io) {
+       const r = await io.svc('POST', `/orders/${ctx.orderId}/payments`, undefined, 'otro-' + ctx.key, 'Segundo intento');
+       return r.status === 409 ? pass('Bloqueado con 409: no se envió un segundo cobro a la pasarela.') : fail('Se esperaba 409.');
+     }},
+    {title: 'La pasarela se recupera', expect: 'Responde normal otra vez',
+     what: 'Se quita la demora. Al consultar por la referencia, la pasarela informa que el pago sí se aprobó.',
+     why: '<b>Por qué importa:</b> la referencia que se envió es el id del intento: con ella siempre se puede preguntar qué pasó.',
+     async run(ctx, io) {
+       await io.tool('/api/gateway/reset', {}, 'Pasarela simulada: sin demora');
+       return pass('Pasarela restablecida.');
+     }},
+    {title: 'Esperar a la conciliación', expect: 'UNKNOWN → APPROVED · orden PAID (≈ 1-2 min)',
+     what: 'Un proceso programado (cada 60 s, en un solo nodo con ShedLock) consulta a la pasarela los pagos UNKNOWN y aplica la respuesta con la misma máquina de estados.',
+     why: '<b>Por qué importa:</b> nadie tuvo que intervenir. Si la pasarela no respondiera en 48 h, el pago pasaría a revisión manual (regla R5).',
+     async run(ctx, io) {
+       const w = await waitFor(() => getPayment(ctx.attemptId), p => p?.status === 'APPROVED', 150000,
+         (p, f, s) => { io.progress(`${s} s · pago ${p?.status}… la conciliación corre cada 60 s`, f); refreshTx(ctx); });
+       const o = await getOrder(ctx.orderId), h = await getHistory(ctx.attemptId);
+       const bySync = h.some(e => e.toStatus === 'APPROVED' && e.source === 'RECONCILIATION');
+       return w.ok && o.status === 'PAID' && bySync
+         ? pass(`Resuelto en ${w.s} s por la conciliación: APPROVED y orden PAID.`) : fail(`Pago ${w.value?.status}.`);
+     }},
+  ]},
+{
+  id: 'liquidacion', n: 3, nav: 'Conciliación diaria',
+  title: 'Conciliación diaria contra el archivo de liquidación',
+  lead: 'Cada madrugada la pasarela entrega el archivo con lo que realmente cobró. Se compara con nuestra base de datos: es la última red de seguridad del dinero.',
+  problem: 'Un webhook perdido, un monto alterado o un cobro desconocido pueden pasar inadvertidos durante el día.',
+  solution: 'Carga en lote y cruce por conjuntos en PL/SQL (pkg_settlement.compare). Se corrige solo lo seguro; el resto queda registrado para revisión.',
+  steps: [
+    {title: 'Crear cuatro pagos', expect: 'A, B y D APPROVED · C PENDING',
+     what: 'Cuatro clientes pagan 150.000 COP. A, B y D reciben su webhook de aprobación; el de C "se pierde" y queda PENDING.',
+     why: '<b>Por qué importa:</b> C es un cliente que pagó y no lo sabemos. Sin conciliación, su orden nunca se entregaría.',
+     async run(ctx, io) {
+       ctx.pays = {};
+       for (const L of ['A', 'B', 'C', 'D']) {
+         const k = `liq-${L}-${uid()}`;
+         const o = await io.svc('POST', '/orders', ORDER, k, `Orden ${L}`);
+         const p = await io.svc('POST', `/orders/${o.body.id}/payments`, undefined, 'p-' + k, `Pago ${L}`);
+         ctx.pays[L] = {label: L, orderId: o.body.id, attemptId: p.body.attemptId, ppid: p.body.providerPaymentId};
+       }
+       for (const L of ['A', 'B', 'D']) {
+         const x = ctx.pays[L];
+         await io.hook({eventId: 'evt-' + uid(), reference: x.attemptId, providerPaymentId: x.ppid, status: 'APPROVED'}, `Webhook APPROVED de ${L}`);
+       }
+       ctx.tracked = Object.values(ctx.pays); ctx.sel = 'C'; refreshTx(ctx);
+       io.progress('Esperando a que se apliquen los webhooks…');
+       const w = await waitFor(async () => Promise.all(['A', 'B', 'D'].map(L => getPayment(ctx.pays[L].attemptId))),
+         ps => ps.every(p => p.status === 'APPROVED'), 15000);
+       const c = await getPayment(ctx.pays.C.attemptId);
+       return w.ok && c.status === 'PENDING' ? pass('A, B y D aprobados por webhook; C sigue PENDING.') : fail('Los estados no son los esperados.');
+     }},
+    {title: 'La pasarela entrega su liquidación', expect: 'Archivo CSV del día',
+     what: 'Se genera el archivo que enviaría la pasarela, con diferencias puestas a propósito.',
+     why: '<b>Por qué importa:</b> el archivo llega por SFTP a un buzón. Si no llega, la corrida falla y alerta: conciliar contra un archivo vacío marcaría todo como no liquidado.',
+     async run(ctx, io) {
+       const P = ctx.pays; ctx.unknown = 'pay-desconocido-' + uid().slice(-4); ctx.date = today();
+       ctx.lines = [
+         {k: 'A', providerPaymentId: P.A.ppid, reference: P.A.attemptId, status: 'APPROVED', amount: 150000, currency: 'COP', note: 'Coincide'},
+         {k: 'C', providerPaymentId: P.C.ppid, reference: P.C.attemptId, status: 'APPROVED', amount: 150000, currency: 'COP', note: 'Aquí sigue PENDING'},
+         {k: 'D', providerPaymentId: P.D.ppid, reference: P.D.attemptId, status: 'APPROVED', amount: 140000, currency: 'COP', note: 'Monto distinto'},
+         {k: '?', providerPaymentId: ctx.unknown, reference: '', status: 'APPROVED', amount: 99000, currency: 'COP', note: 'No existe aquí'},
+       ];
+       const r = await io.tool('/api/settlement-file', {date: ctx.date, lines: ctx.lines}, 'Escribir archivo de liquidación');
+       const rows = ctx.lines.map(l => `<tr><td><b>${l.k}</b></td><td class="mono">${esc(l.providerPaymentId)}</td><td>${st(l.status)}</td>
+         <td class="num">${money(l.amount)}</td><td class="hint">${l.note}</td></tr>`).join('');
+       return pass(`Archivo ${r.file} (B no aparece: aprobado aquí y no liquidado).`,
+         `<div class="tablebox"><table class="t"><tr><th></th><th>Id en la pasarela</th><th>Estado</th><th class="num">Monto</th><th>Observación</th></tr>${rows}</table></div>`);
+     }},
+    {title: 'Ejecutar la conciliación', expect: '1 corrección automática · 3 para revisión',
+     what: 'Carga el archivo en lote, ejecuta pkg_settlement.compare en Oracle y corrige lo que es seguro corregir.',
+     why: '<b>Por qué importa:</b> el cruce se hace por conjuntos dentro de Oracle, no fila por fila en Java: con millones de operaciones diarias es la diferencia entre segundos y horas.',
+     async run(ctx, io) {
+       const r = await io.svc('POST', `/admin/settlement/run?date=${ctx.date}`, undefined, null, 'Conciliación del día');
+       if (r.status !== 200) return fail('La conciliación falló: HTTP ' + r.status);
+       ctx.total = r.body.discrepancies.length;
+       const byAttempt = Object.fromEntries(Object.values(ctx.pays).map(p => [p.attemptId, p.label]));
+       const mineD = r.body.discrepancies.filter(d => byAttempt[d.attemptId] || d.providerPaymentId === ctx.unknown);
+       const find = (L, type) => mineD.find(d => (L === '?' ? d.providerPaymentId === ctx.unknown : byAttempt[d.attemptId] === L) && d.type === type);
+       const ok = find('C', 'APPROVED_NOT_HERE')?.resolution === 'AUTO_FIXED' && find('B', 'NOT_SETTLED') && find('D', 'AMOUNT_MISMATCH') && find('?', 'APPROVED_NOT_HERE');
+       const rows = mineD.map(d => `<tr><td><b>${byAttempt[d.attemptId] || '?'}</b></td><td class="mono">${esc(d.type)}</td><td>${st(d.resolution)}</td>
+         <td>${st(d.ourStatus)} <span class="arrow">vs</span> ${st(d.providerStatus)}</td><td class="num">${money(d.ourAmount)}<br><span class="hint">${money(d.providerAmount)}</span></td></tr>`).join('');
+       const others = ctx.total - mineD.length;
+       return (ok ? pass : fail)(ok ? 'C se corrigió solo; B, D y el pago desconocido quedan para revisión manual.' : 'Faltan discrepancias esperadas.',
+         `<div class="tablebox"><table class="t"><tr><th></th><th>Tipo</th><th>Resolución</th><th>Aquí vs. pasarela</th><th class="num">Monto aquí / allá</th></tr>${rows}</table></div>
+          ${others ? `<p class="hint">Además hay ${others} discrepancias de pagos de otras corridas de hoy (por ejemplo, pagos aprobados en otros escenarios que no están en este archivo).</p>` : ''}`);
+     }},
+    {title: 'Verificar la corrección de C', expect: 'C APPROVED por SETTLEMENT · orden PAID',
+     what: 'C se aprobó con la misma máquina de estados que usan el webhook y la conciliación incremental, con origen SETTLEMENT.',
+     why: '<b>Por qué importa:</b> solo se corrige lo que la pasarela confirma y la máquina de estados permite. Las diferencias de dinero las decide una persona.',
+     async run(ctx, io) {
+       ctx.sel = 'C'; await refreshTx(ctx);
+       const p = await getPayment(ctx.pays.C.attemptId), o = await getOrder(ctx.pays.C.orderId), h = await getHistory(ctx.pays.C.attemptId);
+       const last = h[h.length - 1];
+       return p.status === 'APPROVED' && o.status === 'PAID' && last?.source === 'SETTLEMENT'
+         ? pass('C quedó APPROVED con origen SETTLEMENT y su orden PAID.') : fail(`C quedó ${p.status}.`);
+     }},
+    {title: 'Reenviar el mismo archivo', expect: 'No se duplica nada',
+     what: 'La pasarela reenvía el archivo (o operaciones re-ejecuta el día).',
+     why: '<b>Por qué importa:</b> un índice único sobre las discrepancias abiertas hace la corrida idempotente: re-ejecutar es seguro.',
+     async run(ctx, io) {
+       const r = await io.svc('POST', `/admin/settlement/run?date=${ctx.date}`, undefined, null, 'Conciliación otra vez');
+       const n = r.body?.discrepancies?.length;
+       return n === ctx.total ? pass(`Siguen ${n} discrepancias: la corrida es idempotente.`) : fail(`Antes ${ctx.total}, ahora ${n}.`);
+     }},
+  ]},
+];
+
+/* ================================================================= estado */
+const state = {view: 'inicio', runs: {}};
+function runOf(id) {
+  if (!state.runs[id]) {
+    const sc = SCENARIOS.find(s => s.id === id);
+    state.runs[id] = {ctx: {tracked: []}, steps: sc.steps.map((s, i) => ({...s, i, sc: id, status: 'idle', calls: [], result: null}))};
+  }
+  return state.runs[id];
+}
+function track(ctx, t) { ctx.tracked = [t]; refreshTx(ctx); }
+function mine(j, ctx) {
+  return (j.messages || []).filter(m => m.payload?.data?.payment?.orderId === ctx.orderId);
+}
+
+/* ================================================================ render */
+function renderNav() {
+  const item = (id, n, label) => {
+    let prog = '';
+    if (state.runs[id]) {
+      const s = state.runs[id].steps, ok = s.filter(x => x.status === 'ok').length;
+      prog = `<span class="navprog ${ok === s.length ? 'done' : ''}">${ok === s.length ? '✔' : ok + '/' + s.length}</span>`;
+    }
+    return `<button class="navitem ${state.view === id ? 'on' : ''}" onclick="go('${id}')"><span class="navnum">${n}</span>${label}${prog}</button>`;
+  };
+  $('#nav').innerHTML = `<div class="navlabel">Recorrido</div>
+    ${item('inicio', '◎', 'Inicio')}
+    ${SCENARIOS.map(s => item(s.id, s.n, s.nav)).join('')}
+    <div class="navlabel" style="margin-top:16px">Observar</div>
+    ${item('eventos', '≡', 'Eventos publicados')}
+    <div class="navfoot">Diseño completo: <code>docs/diseno-tecnico.md</code> y el PDF en <code>docs/entrega/</code>.</div>`;
+}
+function go(view) { state.view = view; renderNav(); renderMain(); window.scrollTo({top: 0}); }
+
+function renderMain() {
+  if (state.view === 'inicio') return renderHome();
+  if (state.view === 'eventos') return renderEvents();
+  const sc = SCENARIOS.find(s => s.id === state.view), run = runOf(sc.id);
+  $('#main').innerHTML = `
+    <div class="hero"><div><div class="eyebrow">Escenario ${sc.n} de ${SCENARIOS.length}</div><h1>${sc.title}</h1><p class="lead">${sc.lead}</p></div>
+      <div class="actions"><button class="btn" onclick="resetScenario('${sc.id}')">↺ Reiniciar</button>
+      <button class="btn primary" id="runall" onclick="runScenario('${sc.id}')">▶ Ejecutar todo</button></div></div>
+    <div class="ps"><div class="p"><h4>El problema</h4><p>${sc.problem}</p></div><div class="s"><h4>Cómo lo resuelve el diseño</h4><p>${sc.solution}</p></div></div>
+    <div class="cols"><div id="steps">${run.steps.map(s => `<div class="step" id="step-${s.i}"></div>`).join('')}</div>
+      <aside class="side" id="tx"></aside></div>`;
+  run.steps.forEach(renderStep);
+  refreshTx(run.ctx);
+}
+
+function renderStep(s) {
+  const el = document.getElementById('step-' + s.i);
+  if (!el || state.view !== s.sc) return;
+  el.className = 'step ' + s.status + (s.status !== 'idle' ? ' ran' : '');
+  const num = s.status === 'ok' ? '✔' : s.status === 'fail' ? '✕' : s.status === 'running' ? '<span class="spinner"></span>' : s.i + 1;
+  const verdict = s.status === 'running'
+    ? `<div class="verdict run"><span class="spinner"></span><div>${esc(s.live?.text || 'Ejecutando…')}${s.live?.pct != null ? `<div class="bar"><i style="width:${Math.round(s.live.pct * 100)}%"></i></div>` : ''}</div></div>`
+    : s.result ? `<div class="verdict ${s.result.ok ? 'ok' : 'fail'}">${s.result.ok ? '✔' : '✕'} <span>${esc(s.result.msg)}</span></div>` : '';
+  const calls = s.calls.length ? `<div class="calls">${s.calls.map(callHtml).join('')}</div>` : '';
+  el.innerHTML = `<div class="shead"><div class="badge-n">${num}</div><div><div class="stitle">${s.title}</div><div class="sexpect">Esperado: ${s.expect}</div></div>
+      <button class="btn sm" ${busy ? 'disabled' : ''} onclick="runStep('${s.sc}',${s.i})">${s.status === 'idle' ? 'Ejecutar paso' : 'Repetir'}</button></div>
+    <div class="sbody"><p class="what">${s.what}</p><p class="why">${s.why}</p>
+      <div class="result">${verdict}${calls}${s.result?.extra ? `<div class="extra">${s.result.extra}</div>` : ''}</div></div>`;
+}
+function callHtml(c) {
+  const cls = c.status >= 500 ? 'c5' : c.status >= 400 ? 'c4' : 'c2';
+  const reqHead = [c.key ? `Idempotency-Key: ${c.key}` : '', ...Object.entries(c.reqHeaders || {}).map(([k, v]) => `${k}: ${v}`)].filter(Boolean);
+  return `<details class="call"><summary><span class="m ${c.method}">${c.tool ? 'DEMO' : c.method}</span>
+    <span class="path" title="${esc(c.path)}">${esc(c.label || c.path)}</span><span class="code ${cls}">${c.status}</span>
+    <span class="ms">${c.ms ? c.ms + ' ms' : ''}</span></summary>
+    <div class="callbody"><div><h5>Petición · ${esc(c.method)} ${esc(c.path)}</h5>${reqHead.length ? `<pre class="json">${esc(reqHead.join('\n'))}</pre><div style="height:6px"></div>` : ''}
+      <pre class="json">${jsonHtml(c.req)}</pre></div><div><h5>Respuesta · ${c.status}</h5><pre class="json">${jsonHtml(c.res)}</pre></div></div></details>`;
+}
+function eventsHtml(evs) {
+  return evs.map(m => {
+    const p = m.payload || {}, t = p.data?.transition;
+    return `<details class="ev"><summary><span class="evt ${esc(p.eventType)}">${esc(p.eventType || m.routingKey)}</span>
+      ${t ? `<span>${st(t.from)} <span class="arrow">→</span> ${st(t.to)}</span>` : ''}<span class="hint mono">${esc(short(p.eventId))}</span></summary>
+      <div class="body"><ul class="tree">${treeHtml(p)}</ul></div></details>`;
+  }).join('');
+}
+
+async function refreshTx(ctx) {
+  const box = $('#tx'); if (!box) return;
+  const list = ctx.tracked || [];
+  if (!list.length) { box.innerHTML = `<div class="card"><h3>Transacción</h3><div class="empty">Ejecuta el primer paso para ver aquí la orden, el pago y su historial.</div></div>`; return; }
+  try {
+    const data = await Promise.all(list.map(async t => ({...t, o: t.orderId ? await getOrder(t.orderId) : null,
+      p: t.attemptId ? await getPayment(t.attemptId) : null})));
+    const sel = list.length > 1 ? data.find(d => d.label === ctx.sel) || data[0] : data[0];
+    const hist = sel.attemptId ? await getHistory(sel.attemptId) : [];
+    if ($('#tx') !== box) return;
+    const many = data.length > 1 ? `<div class="card"><h3>Pagos de este escenario</h3>${data.map(d => `
+      <div class="mini ${d === sel ? 'sel' : ''}" onclick="selTx('${d.label}')"><b>${d.label}</b>${st(d.p?.status)}${st(d.o?.status)}</div>`).join('')}</div>` : '';
+    box.innerHTML = many + `<div class="card"><h3>${data.length > 1 ? 'Pago ' + sel.label : 'Transacción'}</h3>
+      <dl class="kv"><dt>Orden</dt><dd class="mono" title="${esc(sel.orderId)}">${short(sel.orderId)}</dd>
+      <dt>Estado de la orden</dt><dd>${st(sel.o?.status)}</dd>
+      <dt>Intento de pago</dt><dd class="mono" title="${esc(sel.attemptId)}">${short(sel.attemptId)}</dd>
+      <dt>Estado del pago</dt><dd>${st(sel.p?.status)}</dd>
+      <dt>Id en la pasarela</dt><dd class="mono">${esc(sel.p?.providerPaymentId || '—')}</dd>
+      <dt>Monto</dt><dd>${money(sel.o?.amountMinor)}</dd></dl></div>
+      <div class="card"><h3>Historial en Oracle</h3>${hist.length ? `<ul class="tl">${hist.map(e => `<li>
+        <div class="row">${e.fromStatus ? st(e.fromStatus) + '<span class="arrow">→</span>' : ''}${st(e.toStatus)}<span class="src ${e.source}">${e.source}</span></div>
+        <div class="meta">${new Date(e.occurredAt).toLocaleTimeString()}${e.detail ? ' · ' + esc(e.detail) : ''}</div></li>`).join('')}</ul>`
+        : '<div class="empty">Sin transiciones todavía.</div>'}</div>`;
+  } catch (e) { /* el panel es informativo: si falla una consulta, se reintenta en el próximo paso */ }
+}
+function selTx(label) { const ctx = runOf(state.view).ctx; ctx.sel = label; refreshTx(ctx); }
+
+/* ============================================================= ejecución */
+let busy = false;
+function setBusy(b) {
+  busy = b; const ra = $('#runall'); if (ra) ra.disabled = b;
+  const run = state.runs[state.view]; if (run) run.steps.forEach(renderStep);
+}
+async function execStep(s, ctx) {
+  s.status = 'running'; s.calls = []; s.result = null; s.live = null; renderStep(s); renderNav();
+  document.getElementById('step-' + s.i)?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  try { s.result = await s.run(ctx, recorder(s)); }
+  catch (e) { s.result = fail('Error: ' + e.message + '. ¿Está el servicio arriba? Revisa los indicadores de arriba a la derecha.'); }
+  s.status = s.result.ok ? 'ok' : 'fail'; s.live = null;
+  renderStep(s); renderNav(); refreshTx(ctx);
+  return s.result.ok;
+}
+async function runStep(id, i) {
+  if (busy) return; const run = runOf(id);
+  const missing = run.steps.slice(0, i).find(s => s.status !== 'ok');
+  if (missing) { alert(`Primero ejecuta el paso ${missing.i + 1}: "${missing.title}".`); return; }
+  setBusy(true); await execStep(run.steps[i], run.ctx); setBusy(false);
+}
+async function runScenario(id) {
+  if (busy) return; const run = runOf(id); setBusy(true);
+  for (const s of run.steps) {
+    if (s.status === 'ok') continue;
+    if (!await execStep(s, run.ctx)) break;
+    await sleep(500);
+  }
+  setBusy(false);
+}
+function resetScenario(id) { if (busy) return; delete state.runs[id]; renderNav(); renderMain(); }
+async function runAll() {
+  if (busy) return;
+  for (const sc of SCENARIOS) { go(sc.id); await sleep(300); await runScenario(sc.id); if (runOf(sc.id).steps.some(s => s.status === 'fail')) return; }
+}
+
+/* ================================================================= inicio */
+function renderHome() {
+  $('#main').innerHTML = `
+    <div class="hero"><div><div class="eyebrow">Prueba técnica · Desarrollador Java Senior</div>
+      <h1>Integración asíncrona con una pasarela de pagos</h1>
+      <p class="lead">Esta consola ejecuta contra el servicio real (Java 21, Spring Boot, Oracle y RabbitMQ) los escenarios que pide el enunciado. Cada paso explica qué hace, por qué importa y muestra la petición, la respuesta y el historial guardado en Oracle.</p></div>
+      <div class="actions"><button class="btn primary" onclick="runAll()">▶ Ejecutar toda la prueba</button></div></div>
+    <div class="flow">
+      <div class="node">Cliente / comercio<small>API REST + Idempotency-Key</small></div><span class="arrow">→</span>
+      <div class="node core">Payment Service<small>máquina de estados</small></div><span class="arrow">⇄</span>
+      <div class="node">Pasarela<small>crear · consultar · webhook</small></div><span class="arrow">·</span>
+      <div class="node">Oracle<small>fuente de verdad</small></div><span class="arrow">→</span>
+      <div class="node">RabbitMQ<small>eventos vía outbox</small></div></div>
+    <div class="grid3">${SCENARIOS.map(sc => `<div class="sc"><div class="eyebrow">Escenario ${sc.n}</div><h3>${sc.nav}</h3><p>${sc.lead}</p>
+      <div class="tags"><span class="tag">${sc.steps.length} pasos</span><span class="tag">${sc.id === 'timeout' ? '≈ 1-2 min' : '≈ 20 s'}</span></div>
+      <button class="btn" onclick="go('${sc.id}')">Abrir escenario →</button></div>`).join('')}</div>
+    <div class="guar">
+      <div><i>✔</i><div><b>Sin cobros duplicados</b><span>Un solo intento activo por orden; un timeout nunca se reintenta a ciegas.</span></div></div>
+      <div><i>✔</i><div><b>Notificaciones seguras</b><span>Firma HMAC, anti-replay y deduplicación en el inbox.</span></div></div>
+      <div><i>✔</i><div><b>Ningún estado se pierde</b><span>Estado, historial y evento se confirman en la misma transacción (outbox).</span></div></div>
+      <div><i>✔</i><div><b>Todo se recupera</b><span>Conciliación incremental cada 60 s y diaria contra la liquidación.</span></div></div>
+    </div>`;
+}
+
+/* ================================================================ eventos */
+async function renderEvents() {
+  $('#main').innerHTML = `<div class="hero"><div><div class="eyebrow">Observar</div><h1>Eventos publicados en RabbitMQ</h1>
+    <p class="lead">Lo que reciben los demás sistemas. Cada evento viaja en un sobre con eventId (deduplicación), tipo, versión del esquema, fecha y correlationId.</p></div></div>
+    <div class="toolbar"><input class="input" id="evf" placeholder="Filtrar por tipo, orderId o estado…">
+      <button class="btn sm" onclick="renderEvents()">Actualizar</button>
+      <button class="btn sm" onclick="if(confirm('¿Vaciar la cola de demostración?'))api('/api/events/purge',{}).then(renderEvents)">Vaciar cola</button>
+      <span class="hint" id="evn"></span></div><div id="evlist"><div class="empty">Cargando…</div></div>`;
+  try {
+    const j = await api('/api/events'), list = (j.messages || []).slice().reverse();
+    const draw = () => {
+      const q = ($('#evf')?.value || '').toLowerCase();
+      const f = list.filter(m => !q || JSON.stringify(m).toLowerCase().includes(q));
+      $('#evn').textContent = `${f.length} de ${list.length} eventos · cola ${j.queue} (más recientes primero)`;
+      $('#evlist').innerHTML = f.length ? eventsHtml(f) : '<div class="empty">No hay eventos. Ejecuta un escenario.</div>';
+    };
+    $('#evf').addEventListener('input', draw); draw();
+  } catch (e) { $('#evlist').innerHTML = `<div class="empty">No se pudo leer RabbitMQ: ${esc(e.message)}</div>`; }
+}
+
+/* ================================================================= salud */
+async function health() {
+  try {
+    const h = await api('/api/health');
+    const chip = (ok, name) => `<span class="chip"><span class="dot ${ok ? 'up' : 'down'}"></span>${name}</span>`;
+    $('#health').innerHTML = chip(h.service, 'Servicio') + chip(h.broker, 'RabbitMQ') + chip(h.gateway, 'Pasarela simulada');
+  } catch { $('#health').innerHTML = '<span class="chip"><span class="dot down"></span>Consola sin conexión</span>'; }
+}
+
+renderNav(); renderMain(); health(); setInterval(health, 5000);
+</script>
+</body>
+</html>

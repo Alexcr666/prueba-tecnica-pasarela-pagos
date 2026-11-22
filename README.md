@@ -8,8 +8,8 @@ Integración asíncrona con una pasarela de pagos. El diseño completo está en
 [![Abrir en GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Alexcr666/prueba-tecnica-pasarela-pagos?quickstart=1)
 
 1. Pulsa el botón (requiere una cuenta de GitHub). La primera vez tarda unos 5 minutos en preparar el entorno.
-2. En la terminal que se abre: `./scripts/iniciar.sh`
-3. Corre las demos: `./scripts/demo.sh`, `./scripts/demo-timeout.sh`, `./scripts/demo-liquidacion.sh`
+2. Todo arranca solo en 2 o 3 minutos (o en la terminal: `./scripts/iniciar.sh`).
+3. Abre la **consola de la prueba**: pestaña **PORTS** → puerto **8090** → 🌐. Recorre con botones, paso a paso, los escenarios de éxito, duplicados, timeout y conciliación.
 
 Guía paso a paso: [docs/PROBAR-ONLINE.md](docs/PROBAR-ONLINE.md).
 
