@@ -28,8 +28,12 @@ async function consoleHealth(url) {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   const consoleUrl = process.env.CONSOLE_URL;
+  const missing = ['GH_TOKEN', 'CODESPACE_NAME', 'CONSOLE_URL'].filter(k => !process.env[k]);
+  if (missing.length) return res.status(500).json({error: `faltan variables en Vercel: ${missing.join(', ')}`});
   try {
     const r = await github('');
+    if (r.status === 404) return res.status(502).json({error: `GitHub no encuentra el Codespace "${process.env.CODESPACE_NAME}": revisa CODESPACE_NAME en Vercel`});
+    if (r.status === 401 || r.status === 403) return res.status(502).json({error: `GitHub rechazó el token (${r.status}): revisa GH_TOKEN en Vercel`});
     if (!r.ok) return res.status(502).json({error: `GitHub respondió ${r.status}`});
     let {state} = await r.json();
     let started = false;
