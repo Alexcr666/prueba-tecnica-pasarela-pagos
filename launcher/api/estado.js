@@ -5,8 +5,19 @@ const API = 'https://api.github.com/user/codespaces/';
 // Valores sin espacios ni saltos de línea accidentales al pegarlos en Vercel.
 const env = k => (process.env[k] || '').trim();
 
+// Acepta las dos variables en cualquier orden: de la URL de la consola se deduce el nombre
+// del Codespace (https://<nombre>-8090.app.github.dev) y viceversa.
+function target() {
+  const values = [env('CODESPACE_NAME'), env('CONSOLE_URL')].filter(Boolean);
+  const url = values.find(v => /^https?:\/\//.test(v));
+  const fromUrl = url && (url.match(/^https?:\/\/(.+?)-\d+\.app\.github\.dev/) || [])[1];
+  const name = fromUrl || values.find(v => !/^https?:\/\//.test(v)) || '';
+  const consoleUrl = (url || (name ? `https://${name}-8090.app.github.dev` : '')).replace(/\/+$/, '');
+  return {name, consoleUrl};
+}
+
 async function github(path, method = 'GET') {
-  return fetch(API + env('CODESPACE_NAME') + path, {
+  return fetch(API + target().name + path, {
     method,
     headers: {
       Authorization: `Bearer ${env('GH_TOKEN')}`,
@@ -29,12 +40,12 @@ async function consoleHealth(url) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  const consoleUrl = env('CONSOLE_URL').replace(/\/+$/, '');
-  const missing = ['GH_TOKEN', 'CODESPACE_NAME', 'CONSOLE_URL'].filter(k => !env(k));
+  const {name, consoleUrl} = target();
+  const missing = [['GH_TOKEN', env('GH_TOKEN')], ['CODESPACE_NAME o CONSOLE_URL', name]].filter(([, v]) => !v).map(([k]) => k);
   if (missing.length) return res.status(500).json({error: `faltan variables en Vercel: ${missing.join(', ')}`});
   try {
     const r = await github('');
-    if (r.status === 404) return res.status(502).json({error: `GitHub no encuentra el Codespace "${env('CODESPACE_NAME')}": revisa CODESPACE_NAME en Vercel`});
+    if (r.status === 404) return res.status(502).json({error: `GitHub no encuentra el Codespace "${name}": revisa CODESPACE_NAME en Vercel`});
     if (r.status === 401 || r.status === 403) return res.status(502).json({error: `GitHub rechazó el token (${r.status}): revisa GH_TOKEN en Vercel`});
     if (!r.ok) return res.status(502).json({error: `GitHub respondió ${r.status}`});
     let {state} = await r.json();
