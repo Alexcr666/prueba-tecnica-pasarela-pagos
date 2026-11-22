@@ -1,0 +1,9 @@
+{
+  "request": { "method": "POST", "url": "/v1/payments" },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":\"pay-{{randomValue length=10 type='ALPHANUMERIC'}}\",\"reference\":\"{{jsonPath request.body '$.reference'}}\",\"status\":\"PENDING\",\"redirect_url\":\"https://pasarela.demo/checkout/{{jsonPath request.body '$.reference'}}\"}",
+    "transformers": ["response-template"]
+  }
+}

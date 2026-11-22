@@ -1,0 +1,7 @@
+target/
+.DS_Store
+.idea/
+*.iml
+.vscode/
+local/liquidacion/*.csv
+docs/preparacion-defensa.md

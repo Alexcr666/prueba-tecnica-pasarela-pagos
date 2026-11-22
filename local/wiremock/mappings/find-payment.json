@@ -1,0 +1,9 @@
+{
+  "request": { "method": "GET", "urlPath": "/v1/payments" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":\"pay-{{request.query.reference}}\",\"reference\":\"{{request.query.reference}}\",\"status\":\"APPROVED\",\"amount\":150000,\"currency\":\"COP\"}",
+    "transformers": ["response-template"]
+  }
+}

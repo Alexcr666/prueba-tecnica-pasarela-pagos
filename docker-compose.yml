@@ -1,0 +1,29 @@
+# Entorno local: Oracle Free + RabbitMQ 4.3 con consola de administración.
+# Uso: docker compose up -d   (la primera vez Oracle tarda ~1 min en estar listo)
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: oracle
+      APP_USER: payments
+      APP_USER_PASSWORD: payments
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # http://localhost:15672  guest / guest
+
+  # Pasarela simulada: crea pagos en PENDING y responde APPROVED a las consultas.
+  pasarela:
+    image: wiremock/wiremock:3.13.2
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./local/wiremock:/home/wiremock

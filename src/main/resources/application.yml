@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: payment-service
+  threads:
+    virtual:
+      enabled: true            # virtual threads para las llamadas de I/O
+  datasource:
+    url: ${DB_URL:jdbc:oracle:thin:@localhost:1521/FREEPDB1}
+    username: ${DB_USER:payments}
+    password: ${DB_PASSWORD:payments}   # en producción: credenciales dinámicas desde Vault
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 3000
+  jdbc:
+    template:
+      query-timeout: 5s           # timeout de sentencia (sección 9.1)
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: 5672
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASSWORD:guest}
+    publisher-confirm-type: simple    # el relay espera la confirmación del broker
+    publisher-returns: true           # mensajes no enrutables vuelven al relay (no se pierden)
+
+payments:
+  order-ttl-minutes: 30                 # regla R3
+  provider:
+    name: DEMO
+    base-url: ${PROVIDER_BASE_URL:http://localhost:8089}
+    api-key: ${PROVIDER_API_KEY:dev-key}
+    connect-timeout: 2s
+    create-read-timeout: 10s            # el antifraude añade latencia
+    query-read-timeout: 5s
+    return-url: https://tienda.example/pago/retorno
+    notification-url: https://api.example/webhooks/DEMO
+  webhook:
+    secrets: ${WEBHOOK_SECRETS}   # obligatorio, sin valor por defecto; dos separados por coma durante una rotación
+    tolerance: 5m                            # anti-replay
+    max-body-bytes: 65536
+  inbox:
+    enabled: true
+    batch-size: 50
+    lease-seconds: 60
+    max-attempts: 10
+  outbox:
+    relay-enabled: true
+    batch-size: 100
+    lease-seconds: 30
+    exchange: payments.events
+    confirm-timeout-ms: 5000
+  reconciliation:
+    enabled: true
+    batch-size: 200
+    created-orphan-seconds: 120         # CREATED > 2 min = caída entre llamada y guardado
+    pending-stale-seconds: 900          # PENDING > 15 min = posible webhook perdido
+    first-check-seconds: 30
+    not-found-fail-minutes: 15
+    max-uncertain-hours: 48             # regla R5
+  expiration:
+    enabled: true
+  settlement:
+    cron: "0 30 4 * * *"                # 04:30 UTC, liquidación del día anterior
+    dir: ${SETTLEMENT_DIR:local/liquidacion}   # buzón donde el SFTP deja <PROVIDER>_<yyyy-MM-dd>.csv
+
+logging:
+  structured:
+    format:
+      console: ecs                      # logs JSON estructurados
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics

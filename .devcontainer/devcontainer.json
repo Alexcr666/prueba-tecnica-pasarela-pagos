@@ -1,0 +1,28 @@
+{
+  "name": "Pasarela de pagos (Java 21 + Oracle + RabbitMQ)",
+  "image": "mcr.microsoft.com/devcontainers/java:1-21-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" }
+  },
+  "hostRequirements": { "cpus": 4, "memory": "8gb" },
+  "containerEnv": { "WEBHOOK_SECRETS": "dev-secret" },
+  "postCreateCommand": "./mvnw -q -DskipTests dependency:go-offline package && docker compose pull -q",
+  "postStartCommand": "nohup ./scripts/iniciar.sh > /tmp/iniciar.log 2>&1 &",
+  "forwardPorts": [8080, 8090, 15672],
+  "portsAttributes": {
+    "8080": { "label": "API del servicio" },
+    "8090": { "label": "Visor de eventos", "onAutoForward": "openBrowser" },
+    "15672": { "label": "RabbitMQ (guest/guest)" },
+    "1521": { "onAutoForward": "ignore" },
+    "5672": { "onAutoForward": "ignore" },
+    "8089": { "onAutoForward": "ignore" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["vscjava.vscode-java-pack", "bierner.markdown-mermaid"],
+      "settings": { "workbench.startupEditor": "none" }
+    },
+    "codespaces": { "openFiles": ["docs/PROBAR-ONLINE.md"] }
+  }
+}
