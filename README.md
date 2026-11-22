@@ -12,7 +12,7 @@ Stack: Java 21, Spring Boot 4.1, Oracle (19c en adelante), RabbitMQ 4.3, Resilie
 | Demo en línea, sin instalar nada | https://prueba-tecnica-pasarela-pagos-launcher-gelsa.vercel.app |
 | Código fuente | Este repositorio (`src/main/java/com/pagos/payments`) |
 
-**Sobre la demo en línea.** El sistema completo (servicio, Oracle, RabbitMQ y una pasarela simulada) corre en un GitHub Codespace que se apaga solo cuando nadie lo usa. El enlace de arriba abre una página que revisa si está encendido; si no, lo enciende, espera a que la base de datos quede lista y abre la consola. Si estaba apagado tarda entre 1 y 3 minutos; si ya estaba encendido, unos segundos.
+**Sobre la demo en línea.** El sistema completo (servicio, Oracle, RabbitMQ y una pasarela simulada) corre en un GitHub Codespace que se apaga solo cuando nadie lo usa. El enlace de arriba abre una página que revisa si está encendido; si no, lo enciende, espera a que la base de datos quede lista y abre la consola. Si estaba apagado tarda entre 1 y 3 minutos; si ya estaba encendido, unos segundos. Antes de la consola, GitHub muestra una vez un aviso de seguridad ("You are about to access a development port"); hay que pulsar Continue.
 
 Si el enlace no responde, la alternativa es crear un entorno propio con el botón de abajo. Necesita una cuenta de GitHub y tarda unos 8 minutos la primera vez, porque descarga Oracle.
 

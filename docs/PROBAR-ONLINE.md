@@ -4,7 +4,7 @@
 
 https://prueba-tecnica-pasarela-pagos-launcher-gelsa.vercel.app
 
-Abre la consola de la prueba. El sistema corre en un GitHub Codespace que se apaga cuando nadie lo usa; la página revisa si está encendido, lo enciende si hace falta y redirige a la consola cuando Oracle, RabbitMQ y el servicio responden. Si estaba apagado tarda entre 1 y 3 minutos.
+Abre la consola de la prueba. El sistema corre en un GitHub Codespace que se apaga cuando nadie lo usa; la página revisa si está encendido, lo enciende si hace falta y redirige a la consola cuando Oracle, RabbitMQ y el servicio responden. Si estaba apagado tarda entre 1 y 3 minutos. Antes de la consola, GitHub muestra una vez un aviso de seguridad propio de Codespaces; se pulsa Continue.
 
 ## Opción 2: entorno propio en GitHub Codespaces
 

@@ -112,10 +112,11 @@ async function poll() {
       setStep('s4', 'run'); progress(100);
       $('title').textContent = 'Entorno listo';
       $('sub').textContent = 'Abriendo la consola de la prueba…';
+      msg('GitHub mostrará un aviso de seguridad antes de abrir la consola ("You are about to access a development port"). Pulsa Continue; solo aparece una vez.');
       done = true;
-      setTimeout(() => { window.location.href = d.url; }, 1200);
-      setTimeout(() => { setStep('s4', 'ok'); msg(''); $('msg').innerHTML = ''; }, 1300);
-      setTimeout(() => { const m = $('msg'); m.innerHTML = 'Si no se abre sola: <a class="btn" href="' + d.url + '">Abrir la consola</a>'; m.className = 'msg'; m.style.display = 'block'; }, 5000);
+      setTimeout(() => { window.location.href = d.url; }, 4500);
+      setTimeout(() => { setStep('s4', 'ok'); }, 4400);
+      setTimeout(() => { const m = $('msg'); m.innerHTML = 'Si no se abre sola: <a class="btn" href="' + d.url + '">Abrir la consola</a>'; m.className = 'msg'; m.style.display = 'block'; }, 9000);
       return;
     }
     setStep('s3', 'run'); progress(55 + Math.min(40, elapsed / 3));
