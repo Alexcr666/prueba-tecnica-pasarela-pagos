@@ -377,21 +377,21 @@ SELECT h.occurred_at, h.from_status, h.to_status, h.source,
 
 ## 12. Estrategia de pruebas
 
-La columna **Estado** distingue lo que ya está automatizado en la implementación de referencia (✔) de lo que se propone para la siguiente fase.
+La columna **Estado** distingue lo que ya está automatizado en la implementación de referencia de lo que se propone para la siguiente fase.
 
 | Nivel | Qué valida | Herramienta | Casos clave | Estado |
 | --- | --- | --- | --- | --- |
-| Unitarias | Máquina de estados | JUnit 5, AssertJ | Los 49 pares origen → destino de la tabla 5.1, permitidos o rechazados | ✔ `PaymentStateMachineTest` |
-| Unitarias | Verificación de firma | JUnit 5 | Firma válida, cuerpo alterado, timestamp vencido o absurdo, segundo secreto en rotación | ✔ `WebhookSignatureVerifierTest` |
-| Unitarias | Clave del inbox | JUnit 5 | Id del proveedor o hash de (pago, estado) cuando falta (supuesto S4) | ✔ `WebhookEventKeyTest` |
-| Proveedor simulado | Políticas de resiliencia | WireMock | Éxito; timeout de lectura → `UNKNOWN` sin reintento; 5xx → `UNKNOWN`; conexión rechazada → `FAILED`; 4xx; 409; consulta con reintentos | ✔ `HttpPaymentProviderAdapterTest` |
-| Integración | Flujo completo en Oracle real | Testcontainers (Oracle Free), Flyway | Webhook aprueba el pago y paga la orden una sola vez | ✔ `PaymentFlowIT` |
-| Concurrencia | Exactamente un efecto | `CountDownLatch`, `ExecutorService` | Mismo webhook ×2 en paralelo → 1 historial y 1 evento. `PENDING` y `APPROVED` cruzados → final `APPROVED` | ✔ `PaymentFlowIT` |
-| Fuera de orden | No hay retroceso | Integración | `APPROVED` y luego `PENDING` → sigue `APPROVED`; el evento queda `IGNORED_STALE` | ✔ `PaymentFlowIT` |
-| Idempotencia API | Una sola llamada al proveedor | Integración + WireMock | Misma `Idempotency-Key` dos veces → mismo intento, 1 POST al proveedor | ✔ `PaymentFlowIT` |
-| Recuperación | Resultado incierto | Integración, WireMock, Awaitility | Timeout → `UNKNOWN`, segundo intento bloqueado, la conciliación resuelve | ✔ `PaymentFlowIT` |
-| Monto distinto | Regla R2 | Integración | Aprobado con otro monto → orden `REQUIRES_REVIEW` y discrepancia | ✔ `PaymentFlowIT` |
-| Conciliación diaria | PL/SQL `pkg_settlement` | Integración | Los 3 tipos de discrepancia, corrección automática e idempotencia | ✔ `SettlementIT` |
+| Unitarias | Máquina de estados | JUnit 5, AssertJ | Los 49 pares origen → destino de la tabla 5.1, permitidos o rechazados | Implementada (`PaymentStateMachineTest`) |
+| Unitarias | Verificación de firma | JUnit 5 | Firma válida, cuerpo alterado, timestamp vencido o absurdo, segundo secreto en rotación | Implementada (`WebhookSignatureVerifierTest`) |
+| Unitarias | Clave del inbox | JUnit 5 | Id del proveedor o hash de (pago, estado) cuando falta (supuesto S4) | Implementada (`WebhookEventKeyTest`) |
+| Proveedor simulado | Políticas de resiliencia | WireMock | Éxito; timeout de lectura → `UNKNOWN` sin reintento; 5xx → `UNKNOWN`; conexión rechazada → `FAILED`; 4xx; 409; consulta con reintentos | Implementada (`HttpPaymentProviderAdapterTest`) |
+| Integración | Flujo completo en Oracle real | Testcontainers (Oracle Free), Flyway | Webhook aprueba el pago y paga la orden una sola vez | Implementada (`PaymentFlowIT`) |
+| Concurrencia | Exactamente un efecto | `CountDownLatch`, `ExecutorService` | Mismo webhook ×2 en paralelo → 1 historial y 1 evento. `PENDING` y `APPROVED` cruzados → final `APPROVED` | Implementada (`PaymentFlowIT`) |
+| Fuera de orden | No hay retroceso | Integración | `APPROVED` y luego `PENDING` → sigue `APPROVED`; el evento queda `IGNORED_STALE` | Implementada (`PaymentFlowIT`) |
+| Idempotencia API | Una sola llamada al proveedor | Integración + WireMock | Misma `Idempotency-Key` dos veces → mismo intento, 1 POST al proveedor | Implementada (`PaymentFlowIT`) |
+| Recuperación | Resultado incierto | Integración, WireMock, Awaitility | Timeout → `UNKNOWN`, segundo intento bloqueado, la conciliación resuelve | Implementada (`PaymentFlowIT`) |
+| Monto distinto | Regla R2 | Integración | Aprobado con otro monto → orden `REQUIRES_REVIEW` y discrepancia | Implementada (`PaymentFlowIT`) |
+| Conciliación diaria | PL/SQL `pkg_settlement` | Integración | Los 3 tipos de discrepancia, corrección automática e idempotencia | Implementada (`SettlementIT`) |
 | Mensajería | Outbox | Testcontainers (RabbitMQ) | Broker caído → el outbox acumula y luego drena; mensaje sin cola → no se marca `SENT` | Propuesta (verificado a mano con el entorno local) |
 | Arquitectura | Límites hexagonales | ArchUnit | El dominio no depende de Spring Web ni de los adaptadores | Propuesta |
 | Carga | Webhooks y API | Gatling | 150 webhooks/s con p99 < 200 ms | Propuesta |
@@ -421,7 +421,7 @@ La columna **Estado** distingue lo que ya está automatizado en la implementaci�
 - **Asistente de IA:** herramienta de apoyo para investigación, validación de versiones, redacción y código. El candidato revisó y validó todo el contenido, y asume y sustenta cada decisión en la defensa técnica.
 - **Diagramas:** Mermaid.
 - **Implementación de referencia:** Java 21+/Spring Boot 4.1.3 con el núcleo del diseño: máquina de estados, transición idempotente, inicio de pago con `UNKNOWN`, webhooks firmados, inbox, outbox con sobre versionado, conciliación incremental y conciliación diaria en PL/SQL con lector de archivo. Incluye 84 pruebas automatizadas (73 unitarias y 11 de integración contra Oracle real con Testcontainers).
-- **Entorno local y demos:** Docker Compose con Oracle Free, RabbitMQ y una pasarela simulada (WireMock). Tres scripts reproducen los escenarios de este documento contra el servicio real: flujo completo con duplicados y eventos fuera de orden, timeout resuelto por conciliación, y conciliación diaria con los tres tipos de discrepancia. Una consola web recorre esos escenarios paso a paso con botones y muestra cada petición, el historial guardado en Oracle y los eventos publicados en RabbitMQ. El repositorio se puede probar en GitHub Codespaces sin instalar nada.
+- **Entorno local y demos:** Docker Compose con Oracle Free, RabbitMQ y una pasarela simulada (WireMock). Tres scripts reproducen los escenarios de este documento contra el servicio real: flujo completo con duplicados y eventos fuera de orden, timeout resuelto por conciliación, y conciliación diaria con los tres tipos de discrepancia. Una consola web recorre esos escenarios paso a paso con botones y muestra cada petición, el historial guardado en Oracle y los eventos publicados en RabbitMQ. El repositorio se puede probar sin instalar nada en https://prueba-tecnica-pasarela-pagos-launcher-gelsa.vercel.app, que enciende el entorno en GitHub Codespaces y abre la consola. Código: https://github.com/Alexcr666/prueba-tecnica-pasarela-pagos.
 
 **Fuentes de versiones:**
 - [Spring Boot: versiones y fechas de soporte](https://www.herodevs.com/blog-posts/spring-boot-versions-eol-dates-and-latest-releases-april-2026)

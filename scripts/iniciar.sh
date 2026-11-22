@@ -16,8 +16,8 @@ echo " listo"
 
 cat <<TXT
 
-  ▶ Abre la CONSOLA DE LA PRUEBA en el puerto 8090 (en Codespaces: pestaña PORTS → globo del 8090).
-    Recorre cada escenario con botones, paso a paso.
+  Consola de la prueba: puerto 8090 (en Codespaces, pestaña PORTS).
+  Recorre cada escenario con botones, paso a paso.
 
   O desde esta terminal:
     ./scripts/demo.sh               flujo completo, duplicados y fuera de orden

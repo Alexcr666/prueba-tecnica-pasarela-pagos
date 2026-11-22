@@ -54,6 +54,10 @@ export default async function handler(req, res) {
       const s = await github('/start', 'POST');
       started = s.ok;
       if (s.ok) state = 'Starting';
+      else {
+        const why = (await s.json().catch(() => ({}))).message || s.status;
+        return res.status(502).json({error: `GitHub no permitió encender el entorno (${why}). El token necesita el permiso "Codespaces lifecycle admin" con lectura y escritura.`});
+      }
     }
     const health = state === 'Available' ? await consoleHealth(consoleUrl) : null;
     const ready = Boolean(health && health.service && health.broker && health.gateway);

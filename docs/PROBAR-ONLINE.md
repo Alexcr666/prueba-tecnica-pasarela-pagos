@@ -1,39 +1,41 @@
-# Probar en línea (GitHub Codespaces)
+# Probar en línea
 
-Todo corre en el navegador: Oracle Free, RabbitMQ, una pasarela de pagos simulada y el servicio. No hay que instalar nada.
+## Opción 1: enlace directo
 
-## 1. Esperar a que todo arranque
+https://prueba-tecnica-pasarela-pagos-launcher-gelsa.vercel.app
 
-Al abrir el Codespace, la terminal ejecuta sola `./scripts/iniciar.sh`, que levanta Oracle, RabbitMQ, la pasarela simulada, el servicio y la consola. La primera vez tarda unos 5 a 8 minutos porque descarga Oracle; las siguientes, 1 o 2.
+Abre la consola de la prueba. El sistema corre en un GitHub Codespace que se apaga cuando nadie lo usa; la página revisa si está encendido, lo enciende si hace falta y redirige a la consola cuando Oracle, RabbitMQ y el servicio responden. Si estaba apagado tarda entre 1 y 3 minutos.
 
-Termina con **"Todo arriba"** y el enlace de la consola. Si cierras la terminal o algo se detiene, vuelve a lanzarlo (se puede repetir sin problema):
+## Opción 2: entorno propio en GitHub Codespaces
+
+Desde el README, botón "Open in GitHub Codespaces" (requiere cuenta de GitHub).
+
+1. La primera vez tarda unos 8 minutos: compila el servicio y descarga Oracle, RabbitMQ y la pasarela simulada.
+2. Al abrirse, la terminal ejecuta `./scripts/iniciar.sh`, que levanta todo en contenedores y al final muestra el enlace de la consola. También está en la pestaña PORTS, puerto 8090.
+3. Los contenedores se reinician solos: si el Codespace se apaga y se vuelve a encender, todo queda arriba sin ejecutar nada.
+
+## Qué probar en la consola
+
+| Sección | Qué demuestra | Tiempo |
+| --- | --- | --- |
+| 01 Pago y duplicados | Idempotencia de la API, doble clic bloqueado (409), firma falsa rechazada (401), webhook repetido sin efecto, evento tardío ignorado y eventos publicados | 20 s |
+| 02 Timeout | La pasarela tarda más que el límite: el pago queda `UNKNOWN`, no se reintenta el cobro y la conciliación lo resuelve | 1-2 min |
+| 03 Conciliación diaria | Archivo de liquidación con los tres tipos de discrepancia, corrección automática e idempotencia | 20 s |
+
+En Resumen, "Ejecutar la verificación completa" recorre los tres seguidos. También se puede ejecutar cada paso con su botón; cada uno explica qué hace y muestra la petición, la respuesta y el historial en Oracle.
+
+Las secciones Métricas, Eventos, Requisitos de la prueba y Documento de diseño muestran, respectivamente, las métricas del servicio, los mensajes publicados en RabbitMQ, cada punto del enunciado con su evidencia y el documento completo.
+
+## Desde la terminal del Codespace
 
 ```bash
-./scripts/iniciar.sh
+./scripts/demo.sh               # flujo completo, duplicados y fuera de orden
+./scripts/demo-timeout.sh       # timeout, UNKNOWN y conciliación
+./scripts/demo-liquidacion.sh   # conciliación diaria
+./mvnw verify                   # 84 pruebas automatizadas
 ```
 
-## 2. Abrir la consola de la prueba
-
-Abre el enlace que muestra la terminal al terminar, o ve a la pestaña **PORTS** (junto a la terminal) → puerto **8090 · Consola de la prueba** → ícono del globo 🌐.
-
-La consola recorre con botones los tres escenarios del enunciado. Cada paso explica qué hace y por qué importa, y muestra la petición, la respuesta y el historial guardado en Oracle:
-
-| Escenario | Qué demuestra |
-| --- | --- |
-| 1 · Pago y duplicados | Idempotencia de la API, doble clic bloqueado (409), firma falsa rechazada (401), webhook duplicado sin efecto, evento fuera de orden ignorado y eventos publicados en RabbitMQ |
-| 2 · Timeout | La pasarela no responde a tiempo: el pago queda `UNKNOWN`, no se reintenta el cobro y la conciliación lo resuelve sola |
-| 3 · Conciliación diaria | Archivo de liquidación con diferencias: corrección automática, los 3 tipos de discrepancia e idempotencia |
-
-Pulsa **▶ Ejecutar toda la prueba** en el inicio, o ejecuta cada paso con su botón. La pestaña **Eventos publicados** muestra lo que llegó a RabbitMQ.
-
-También se puede desde la terminal: `./scripts/demo.sh`, `./scripts/demo-timeout.sh` y `./scripts/demo-liquidacion.sh`.
-
-## 3. Mirar por dentro
-
-Abre la pestaña **PORTS** (junto a la terminal) y pulsa el ícono del globo en:
-
-- **15672 · RabbitMQ:** consola del broker (usuario `guest`, clave `guest`).
-- **8080 · API del servicio:** `/actuator/health`, `/actuator/prometheus`.
+Antes de `./mvnw verify` conviene detener el Oracle del entorno (`docker compose stop oracle`) para liberar memoria, y volver a levantarlo después con `docker compose start oracle`.
 
 Historial de un pago en Oracle:
 
@@ -41,18 +43,3 @@ Historial de un pago en Oracle:
 docker compose exec oracle sqlplus payments/payments@FREEPDB1
 SELECT from_status, to_status, source, occurred_at FROM payment_status_history ORDER BY id;
 ```
-
-## 4. Pruebas automatizadas
-
-```bash
-docker compose stop oracle      # libera memoria para el Oracle de las pruebas
-./mvnw verify                   # 84 pruebas: 73 unitarias + 11 de integración contra Oracle real
-docker compose start oracle
-```
-
-Debe terminar en `BUILD SUCCESS`. Luego vuelve a correr `./scripts/iniciar.sh`.
-
-## Documentos
-
-- Diseño técnico: [diseno-tecnico.md](diseno-tecnico.md) · [PDF](entrega/Diseno_Tecnico_Pasarela_Pagos.pdf)
-- Código: `src/main/java/com/pagos/payments` (dominio, aplicación, adaptadores, persistencia)

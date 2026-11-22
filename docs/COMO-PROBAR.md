@@ -68,7 +68,7 @@ cd ~/Documents/prueba-gelsa-pagos
 ./scripts/demo.sh
 ```
 
-Recorre 9 pasos y marca cada uno con ✔:
+Recorre 9 pasos y marca cada uno como correcto:
 
 1. Crear una orden.
 2. Repetirla con la misma clave: se devuelve la misma orden (idempotencia).

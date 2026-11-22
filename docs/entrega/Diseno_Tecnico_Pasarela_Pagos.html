@@ -907,7 +907,7 @@ blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid var(--primary);b
  ORDER BY h.occurred_at;
 </code></pre>
 <h2 id="s12">12. Estrategia de pruebas</h2>
-<p>La columna <strong>Estado</strong> distingue lo que ya está automatizado en la implementación de referencia (✔) de lo que se propone para la siguiente fase.</p>
+<p>La columna <strong>Estado</strong> distingue lo que ya está automatizado en la implementación de referencia de lo que se propone para la siguiente fase.</p>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -924,77 +924,77 @@ blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid var(--primary);b
 <td>Máquina de estados</td>
 <td>JUnit 5, AssertJ</td>
 <td>Los 49 pares origen → destino de la tabla 5.1, permitidos o rechazados</td>
-<td>✔ <code>PaymentStateMachineTest</code></td>
+<td>Implementada (<code>PaymentStateMachineTest</code>)</td>
 </tr>
 <tr>
 <td>Unitarias</td>
 <td>Verificación de firma</td>
 <td>JUnit 5</td>
 <td>Firma válida, cuerpo alterado, timestamp vencido o absurdo, segundo secreto en rotación</td>
-<td>✔ <code>WebhookSignatureVerifierTest</code></td>
+<td>Implementada (<code>WebhookSignatureVerifierTest</code>)</td>
 </tr>
 <tr>
 <td>Unitarias</td>
 <td>Clave del inbox</td>
 <td>JUnit 5</td>
 <td>Id del proveedor o hash de (pago, estado) cuando falta (supuesto S4)</td>
-<td>✔ <code>WebhookEventKeyTest</code></td>
+<td>Implementada (<code>WebhookEventKeyTest</code>)</td>
 </tr>
 <tr>
 <td>Proveedor simulado</td>
 <td>Políticas de resiliencia</td>
 <td>WireMock</td>
 <td>Éxito; timeout de lectura → <code>UNKNOWN</code> sin reintento; 5xx → <code>UNKNOWN</code>; conexión rechazada → <code>FAILED</code>; 4xx; 409; consulta con reintentos</td>
-<td>✔ <code>HttpPaymentProviderAdapterTest</code></td>
+<td>Implementada (<code>HttpPaymentProviderAdapterTest</code>)</td>
 </tr>
 <tr>
 <td>Integración</td>
 <td>Flujo completo en Oracle real</td>
 <td>Testcontainers (Oracle Free), Flyway</td>
 <td>Webhook aprueba el pago y paga la orden una sola vez</td>
-<td>✔ <code>PaymentFlowIT</code></td>
+<td>Implementada (<code>PaymentFlowIT</code>)</td>
 </tr>
 <tr>
 <td>Concurrencia</td>
 <td>Exactamente un efecto</td>
 <td><code>CountDownLatch</code>, <code>ExecutorService</code></td>
 <td>Mismo webhook ×2 en paralelo → 1 historial y 1 evento. <code>PENDING</code> y <code>APPROVED</code> cruzados → final <code>APPROVED</code></td>
-<td>✔ <code>PaymentFlowIT</code></td>
+<td>Implementada (<code>PaymentFlowIT</code>)</td>
 </tr>
 <tr>
 <td>Fuera de orden</td>
 <td>No hay retroceso</td>
 <td>Integración</td>
 <td><code>APPROVED</code> y luego <code>PENDING</code> → sigue <code>APPROVED</code>; el evento queda <code>IGNORED_STALE</code></td>
-<td>✔ <code>PaymentFlowIT</code></td>
+<td>Implementada (<code>PaymentFlowIT</code>)</td>
 </tr>
 <tr>
 <td>Idempotencia API</td>
 <td>Una sola llamada al proveedor</td>
 <td>Integración + WireMock</td>
 <td>Misma <code>Idempotency-Key</code> dos veces → mismo intento, 1 POST al proveedor</td>
-<td>✔ <code>PaymentFlowIT</code></td>
+<td>Implementada (<code>PaymentFlowIT</code>)</td>
 </tr>
 <tr>
 <td>Recuperación</td>
 <td>Resultado incierto</td>
 <td>Integración, WireMock, Awaitility</td>
 <td>Timeout → <code>UNKNOWN</code>, segundo intento bloqueado, la conciliación resuelve</td>
-<td>✔ <code>PaymentFlowIT</code></td>
+<td>Implementada (<code>PaymentFlowIT</code>)</td>
 </tr>
 <tr>
 <td>Monto distinto</td>
 <td>Regla R2</td>
 <td>Integración</td>
 <td>Aprobado con otro monto → orden <code>REQUIRES_REVIEW</code> y discrepancia</td>
-<td>✔ <code>PaymentFlowIT</code></td>
+<td>Implementada (<code>PaymentFlowIT</code>)</td>
 </tr>
 <tr>
 <td>Conciliación diaria</td>
 <td>PL/SQL <code>pkg_settlement</code></td>
 <td>Integración</td>
 <td>Los 3 tipos de discrepancia, corrección automática e idempotencia</td>
-<td>✔ <code>SettlementIT</code></td>
+<td>Implementada (<code>SettlementIT</code>)</td>
 </tr>
 <tr>
 <td>Mensajería</td>
@@ -1039,7 +1039,7 @@ blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid var(--primary);b
 <li><strong>Asistente de IA:</strong> herramienta de apoyo para investigación, validación de versiones, redacción y código. El candidato revisó y validó todo el contenido, y asume y sustenta cada decisión en la defensa técnica.</li>
 <li><strong>Diagramas:</strong> Mermaid.</li>
 <li><strong>Implementación de referencia:</strong> Java 21+/Spring Boot 4.1.3 con el núcleo del diseño: máquina de estados, transición idempotente, inicio de pago con <code>UNKNOWN</code>, webhooks firmados, inbox, outbox con sobre versionado, conciliación incremental y conciliación diaria en PL/SQL con lector de archivo. Incluye 84 pruebas automatizadas (73 unitarias y 11 de integración contra Oracle real con Testcontainers).</li>
-<li><strong>Entorno local y demos:</strong> Docker Compose con Oracle Free, RabbitMQ y una pasarela simulada (WireMock). Tres scripts reproducen los escenarios de este documento contra el servicio real: flujo completo con duplicados y eventos fuera de orden, timeout resuelto por conciliación, y conciliación diaria con los tres tipos de discrepancia. Una consola web recorre esos escenarios paso a paso con botones y muestra cada petición, el historial guardado en Oracle y los eventos publicados en RabbitMQ. El repositorio se puede probar en GitHub Codespaces sin instalar nada.</li>
+<li><strong>Entorno local y demos:</strong> Docker Compose con Oracle Free, RabbitMQ y una pasarela simulada (WireMock). Tres scripts reproducen los escenarios de este documento contra el servicio real: flujo completo con duplicados y eventos fuera de orden, timeout resuelto por conciliación, y conciliación diaria con los tres tipos de discrepancia. Una consola web recorre esos escenarios paso a paso con botones y muestra cada petición, el historial guardado en Oracle y los eventos publicados en RabbitMQ. El repositorio se puede probar sin instalar nada en https://prueba-tecnica-pasarela-pagos-launcher-gelsa.vercel.app, que enciende el entorno en GitHub Codespaces y abre la consola. Código: https://github.com/Alexcr666/prueba-tecnica-pasarela-pagos.</li>
 </ul>
 <p><strong>Fuentes de versiones:</strong></p>
 <ul>
