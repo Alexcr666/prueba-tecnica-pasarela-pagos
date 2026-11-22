@@ -302,10 +302,21 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def ensure_queue_until_ready():
+    """En contenedores la consola puede arrancar antes que RabbitMQ: reintenta hasta crear la cola."""
+    while True:
+        try:
+            status, _, _ = rabbit("PUT", f"/queues/%2F/{QUEUE}", {"durable": True, "arguments": {"x-queue-type": "quorum"}})
+            if status in (201, 204):
+                bound, _, _ = rabbit("POST", f"/bindings/%2F/e/{EXCHANGE}/q/{QUEUE}", {"routing_key": "#"})
+                if bound in (201, 204):   # el exchange lo crea el servicio al conectarse
+                    return
+        except (urllib.error.URLError, OSError):
+            pass
+        time.sleep(3)
+
+
 if __name__ == "__main__":
-    try:
-        ensure_queue()
-    except (urllib.error.URLError, OSError):
-        print("Aviso: RabbitMQ aún no responde; la cola de demo se creará al consultar eventos.")
+    threading.Thread(target=ensure_queue_until_ready, daemon=True).start()
     print(f"Consola en http://localhost:{PORT}  (servicio {API_URL}, Ctrl+C para salir)")
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    ThreadingHTTPServer((os.environ.get("HOST", "127.0.0.1"), PORT), Handler).serve_forever()

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payment Service · Preparando el entorno</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%230d5c4d%22/%3E%3Cpath d=%22M8 22V10h9a5 5 0 010 10h-6%22 stroke=%22white%22 stroke-width=%223%22 fill=%22none%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f2f1ec;--surface:#fff;--ink:#15191e;--muted:#60666d;--faint:#8b9096;--rule:#d5d2c8;--rule-2:#e6e3db;
+  --primary:#0d5c4d;--soft:#e2eee9;--ok:#1c7442;--bad:#ac2a20;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--paper);color:var(--ink);font:15px/1.55 "IBM Plex Sans",-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column}
+.bar{background:var(--ink);color:#e9eae6;height:52px;display:flex;align-items:center;gap:12px;padding:0 28px}
+.bar b{font:600 12.5px var(--mono);letter-spacing:.12em}
+.bar span{color:#a8adb1;font-size:13px;border-left:1px solid #3a4046;padding-left:12px}
+main{flex:1;display:grid;place-items:center;padding:32px 16px}
+.card{width:100%;max-width:620px;background:var(--surface);border:1px solid var(--rule)}
+.head{padding:24px 28px 18px;border-bottom:1px solid var(--rule-2)}
+.kicker{font:600 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--primary)}
+h1{font-size:22px;margin:6px 0 4px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0;font-size:14px}
+.progress{height:4px;background:var(--rule-2)}
+.progress i{display:block;height:100%;width:0;background:var(--primary);transition:width .8s ease}
+ol{list-style:none;margin:0;padding:10px 28px 6px}
+li{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:start;padding:12px 0;border-bottom:1px solid var(--rule-2)}
+li:last-child{border-bottom:0}
+.ic{width:22px;height:22px;display:grid;place-items:center;font:600 11px var(--mono);border:1px solid var(--rule);color:var(--faint);margin-top:1px}
+li.run .ic{border-color:var(--primary);color:var(--primary)}
+li.ok .ic{background:var(--ok);border-color:var(--ok);color:#fff}
+li.err .ic{background:var(--bad);border-color:var(--bad);color:#fff}
+li b{font-weight:600;font-size:14.5px;display:block}
+li small{color:var(--muted);font-size:13px}
+li.wait{opacity:.55}
+.t{font:12px var(--mono);color:var(--faint);white-space:nowrap;padding-top:3px}
+.spin{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.foot{padding:14px 28px 20px;border-top:1px solid var(--rule-2);background:#f7f6f2;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center}
+.foot .clock{font:12.5px var(--mono);color:var(--muted)}
+.chips{display:flex;gap:14px;font:12px var(--mono);color:var(--muted)}
+.chips i{display:inline-block;width:7px;height:7px;margin-right:6px;background:#c9c6bb;vertical-align:1px}
+.chips i.up{background:var(--ok)}
+.msg{margin:0 28px 18px;padding:10px 12px;border-left:3px solid var(--primary);background:var(--soft);font-size:13.5px;display:none}
+.msg.err{border-color:var(--bad);background:#f8e6e3}
+.links{max-width:620px;width:100%;margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;font-size:13.5px}
+.links a{color:var(--primary);text-decoration:none;border-bottom:1px solid #b6d6c1}
+.btn{display:inline-block;margin-top:2px;padding:8px 16px;background:var(--primary);color:#fff;text-decoration:none;font-weight:500;font-size:13.5px}
+@media(max-width:560px){.bar span{display:none}.head,ol,.foot{padding-left:18px;padding-right:18px}}
+</style>
+</head>
+<body>
+<div class="bar"><svg width="22" height="22" viewBox="0 0 32 32"><rect width="32" height="32" fill="#0d5c4d"/><path d="M8 22V10h9a5 5 0 010 10h-6" stroke="#fff" stroke-width="3" fill="none"/></svg>
+  <b>PAYMENT SERVICE</b><span>Prueba técnica · Integración asíncrona con pasarela de pagos</span></div>
+<main><div>
+  <div class="card">
+    <div class="head"><div class="kicker">Consola de verificación</div><h1 id="title">Preparando el entorno de la prueba</h1>
+      <p class="sub" id="sub">El sistema corre en una máquina en la nube que se apaga cuando nadie la usa. Si está apagada, se enciende sola; tarda entre 1 y 3 minutos.</p></div>
+    <div class="progress"><i id="bar"></i></div>
+    <ol id="steps">
+      <li id="s1" class="run"><span class="ic"><span class="spin"></span></span><div><b>Verificando el entorno</b><small>Consultando el estado de la máquina en GitHub Codespaces.</small></div><span class="t"></span></li>
+      <li id="s2" class="wait"><span class="ic">2</span><div><b>Encendiendo la máquina</b><small>Arranca el contenedor con Java 21 y Docker.</small></div><span class="t"></span></li>
+      <li id="s3" class="wait"><span class="ic">3</span><div><b>Iniciando Oracle, RabbitMQ y el servicio</b><small>La base de datos tarda alrededor de un minuto en quedar lista.</small></div><span class="t"></span></li>
+      <li id="s4" class="wait"><span class="ic">4</span><div><b>Abriendo la consola</b><small>Escenarios, métricas, eventos, requisitos y documento de diseño.</small></div><span class="t"></span></li>
+    </ol>
+    <p class="msg" id="msg"></p>
+    <div class="foot"><span class="clock" id="clock">0:00</span>
+      <span class="chips"><span><i id="c-s"></i>servicio</span><span><i id="c-b"></i>rabbitmq</span><span><i id="c-g"></i>pasarela</span></span></div>
+  </div>
+  <div class="links">Mientras tanto:
+    <a href="https://github.com/Alexcr666/prueba-tecnica-pasarela-pagos/blob/main/docs/entrega/Diseno_Tecnico_Pasarela_Pagos.pdf" target="_blank">Documento de diseño (PDF)</a> ·
+    <a href="https://github.com/Alexcr666/prueba-tecnica-pasarela-pagos" target="_blank">Código fuente</a></div>
+</div></main>
+<script>
+const $ = id => document.getElementById(id);
+const t0 = Date.now(); let phaseStart = {s1: t0}, done = false, pollCount = 0;
+const fmt = ms => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+setInterval(() => { if (!done) $('clock').textContent = 'Tiempo transcurrido ' + fmt(Date.now() - t0); }, 500);
+
+function setStep(id, cls, detail) {
+  const li = $(id); if (li.classList.contains(cls)) return;
+  li.className = cls;
+  const ic = li.querySelector('.ic'), n = id.slice(1);
+  ic.innerHTML = cls === 'run' ? '<span class="spin"></span>' : cls === 'ok' ? '✓' : cls === 'err' ? '!' : n;
+  if (cls === 'run') phaseStart[id] = Date.now();
+  if (cls === 'ok' && phaseStart[id]) li.querySelector('.t').textContent = fmt(Date.now() - phaseStart[id]);
+  if (detail) li.querySelector('small').textContent = detail;
+}
+function progress(p) { $('bar').style.width = Math.max(4, Math.min(100, p)) + '%'; }
+function chips(h) { [['c-s', 'service'], ['c-b', 'broker'], ['c-g', 'gateway']].forEach(([id, k]) => $(id).className = h && h[k] ? 'up' : ''); }
+function msg(text, err) { const m = $('msg'); m.textContent = text; m.className = 'msg' + (err ? ' err' : ''); m.style.display = text ? 'block' : 'none'; }
+
+async function poll() {
+  pollCount++;
+  let d;
+  try {
+    const r = await fetch('/api/estado', {method: 'POST', cache: 'no-store'});
+    d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+  } catch (e) {
+    msg('No se pudo consultar el entorno (' + e.message + '). Reintentando…', true);
+    return setTimeout(poll, 5000);
+  }
+  msg('');
+  setStep('s1', 'ok');
+  const elapsed = (Date.now() - t0) / 1000;
+  if (d.state === 'Available') {
+    setStep('s2', 'ok', 'La máquina está encendida.');
+    chips(d.health);
+    if (d.ready) {
+      setStep('s3', 'ok', 'Oracle, RabbitMQ, la pasarela simulada y el servicio responden.');
+      setStep('s4', 'run'); progress(100);
+      $('title').textContent = 'Entorno listo';
+      $('sub').textContent = 'Abriendo la consola de la prueba…';
+      done = true;
+      setTimeout(() => { window.location.href = d.url; }, 1200);
+      setTimeout(() => { setStep('s4', 'ok'); msg(''); $('msg').innerHTML = ''; }, 1300);
+      setTimeout(() => { const m = $('msg'); m.innerHTML = 'Si no se abre sola: <a class="btn" href="' + d.url + '">Abrir la consola</a>'; m.className = 'msg'; m.style.display = 'block'; }, 5000);
+      return;
+    }
+    setStep('s3', 'run'); progress(55 + Math.min(40, elapsed / 3));
+  } else if (['Starting', 'Provisioning', 'Queued', 'Rebuilding', 'Awaiting', 'Unknown'].includes(d.state) || d.started) {
+    setStep('s2', 'run', d.started ? 'La máquina estaba apagada: se está encendiendo.' : 'La máquina se está encendiendo.');
+    progress(15 + Math.min(35, elapsed / 2));
+  } else if (d.state === 'Shutdown' || d.state === 'ShuttingDown') {
+    setStep('s2', 'run', 'La máquina se estaba apagando; se volverá a encender.'); progress(12);
+  } else {
+    setStep('s2', 'err'); msg('Estado inesperado del entorno: ' + d.state + '. Reintentando…', true);
+  }
+  setTimeout(poll, pollCount < 3 ? 1500 : 3000);
+}
+poll();
+</script>
+</body>
+</html>

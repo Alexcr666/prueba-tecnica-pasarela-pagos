@@ -24,7 +24,7 @@
   "containerEnv": {
     "WEBHOOK_SECRETS": "dev-secret"
   },
-  "postCreateCommand": "./mvnw -q -DskipTests dependency:go-offline package && docker compose pull -q",
+  "postCreateCommand": "./mvnw -q -DskipTests package && docker compose --profile completo up -d --build",
   "postAttachCommand": "./scripts/iniciar.sh",
   "forwardPorts": [
     8080,

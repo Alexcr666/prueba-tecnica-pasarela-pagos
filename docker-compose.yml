@@ -1,8 +1,13 @@
-# Entorno local: Oracle Free + RabbitMQ 4.3 con consola de administración.
-# Uso: docker compose up -d   (la primera vez Oracle tarda ~1 min en estar listo)
+# Entorno completo. Todos los servicios se reinician solos (restart: unless-stopped), así que al
+# volver a encender el Codespace o la máquina todo queda arriba sin intervención.
+#
+#   docker compose up -d                          infraestructura: Oracle, RabbitMQ y la pasarela simulada
+#   docker compose --profile completo up -d       + el servicio (:8080) y la consola de la prueba (:8090)
+#                                                 (requiere ./mvnw -DskipTests package antes)
 services:
   oracle:
     image: gvenzl/oracle-free:23-slim-faststart
+    restart: unless-stopped
     ports:
       - "1521:1521"
     environment:
@@ -12,10 +17,11 @@ services:
     healthcheck:
       test: ["CMD", "healthcheck.sh"]
       interval: 10s
-      retries: 20
+      retries: 30
 
   rabbitmq:
     image: rabbitmq:4.3-management
+    restart: unless-stopped
     ports:
       - "5672:5672"
       - "15672:15672"   # http://localhost:15672  guest / guest
@@ -23,7 +29,46 @@ services:
   # Pasarela simulada: crea pagos en PENDING y responde APPROVED a las consultas.
   pasarela:
     image: wiremock/wiremock:3.13.2
+    restart: unless-stopped
     ports:
       - "8089:8080"
     volumes:
       - ./local/wiremock:/home/wiremock
+
+  servicio:
+    profiles: ["completo"]
+    build: .
+    restart: unless-stopped        # si Oracle aún no está listo, arranca de nuevo hasta conectar
+    depends_on:
+      oracle: {condition: service_healthy}
+      rabbitmq: {condition: service_started}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      DB_URL: jdbc:oracle:thin:@oracle:1521/FREEPDB1
+      RABBIT_HOST: rabbitmq
+      PROVIDER_BASE_URL: http://pasarela:8080
+      WEBHOOK_SECRETS: dev-secret
+      SETTLEMENT_DIR: /app/local/liquidacion
+    volumes:
+      - ./local/liquidacion:/app/local/liquidacion
+
+  consola:
+    profiles: ["completo"]
+    image: python:3.12-slim
+    restart: unless-stopped
+    working_dir: /work
+    command: ["python3", "scripts/consola.py"]
+    ports:
+      - "8090:8090"
+    environment:
+      HOST: 0.0.0.0
+      API_URL: http://servicio:8080
+      PASARELA_URL: http://pasarela:8080
+      RABBIT_API: http://rabbitmq:15672/api
+      WEBHOOK_SECRETS: dev-secret
+      SETTLEMENT_DIR: /work/local/liquidacion
+    volumes:
+      - ./scripts:/work/scripts:ro
+      - ./docs:/work/docs:ro
+      - ./local/liquidacion:/work/local/liquidacion
