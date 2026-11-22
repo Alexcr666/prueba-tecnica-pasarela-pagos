@@ -2,12 +2,14 @@
 // Variables (en Vercel): GH_TOKEN (token de grano fino, solo "Codespaces" de este repositorio),
 // CODESPACE_NAME y CONSOLE_URL. El token nunca llega al navegador.
 const API = 'https://api.github.com/user/codespaces/';
+// Valores sin espacios ni saltos de línea accidentales al pegarlos en Vercel.
+const env = k => (process.env[k] || '').trim();
 
 async function github(path, method = 'GET') {
-  return fetch(API + process.env.CODESPACE_NAME + path, {
+  return fetch(API + env('CODESPACE_NAME') + path, {
     method,
     headers: {
-      Authorization: `Bearer ${process.env.GH_TOKEN}`,
+      Authorization: `Bearer ${env('GH_TOKEN')}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'lanzador-pasarela-pagos',
@@ -27,12 +29,12 @@ async function consoleHealth(url) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  const consoleUrl = process.env.CONSOLE_URL;
-  const missing = ['GH_TOKEN', 'CODESPACE_NAME', 'CONSOLE_URL'].filter(k => !process.env[k]);
+  const consoleUrl = env('CONSOLE_URL').replace(/\/+$/, '');
+  const missing = ['GH_TOKEN', 'CODESPACE_NAME', 'CONSOLE_URL'].filter(k => !env(k));
   if (missing.length) return res.status(500).json({error: `faltan variables en Vercel: ${missing.join(', ')}`});
   try {
     const r = await github('');
-    if (r.status === 404) return res.status(502).json({error: `GitHub no encuentra el Codespace "${process.env.CODESPACE_NAME}": revisa CODESPACE_NAME en Vercel`});
+    if (r.status === 404) return res.status(502).json({error: `GitHub no encuentra el Codespace "${env('CODESPACE_NAME')}": revisa CODESPACE_NAME en Vercel`});
     if (r.status === 401 || r.status === 403) return res.status(502).json({error: `GitHub rechazó el token (${r.status}): revisa GH_TOKEN en Vercel`});
     if (!r.ok) return res.status(502).json({error: `GitHub respondió ${r.status}`});
     let {state} = await r.json();
