@@ -6,6 +6,9 @@ cd "$(dirname "$0")/.."
 export WEBHOOK_SECRETS=${WEBHOOK_SECRETS:-dev-secret}
 PORT=${SERVER_PORT:-8080}
 LOGS=${LOGS:-/tmp}
+# Los procesos en segundo plano deben sobrevivir a este script (en Codespaces la terminal
+# del postAttachCommand se cierra al terminar). setsid no existe en macOS: ahí basta nohup.
+BG=(nohup); command -v setsid >/dev/null && BG=(setsid -f nohup)
 
 echo "1/4 Infraestructura (Oracle, RabbitMQ, pasarela simulada)..."
 docker compose up -d
@@ -15,14 +18,14 @@ echo " listo"
 
 echo "2/4 Servicio de pagos en :$PORT..."
 if ! curl -s "localhost:$PORT/actuator/health" | grep -q UP; then
-  SERVER_PORT=$PORT nohup ./mvnw -q spring-boot:run > "$LOGS/servicio.log" 2>&1 &
+  SERVER_PORT=$PORT "${BG[@]}" ./mvnw -q spring-boot:run > "$LOGS/servicio.log" 2>&1 < /dev/null &
   printf "    arrancando"
   until curl -s "localhost:$PORT/actuator/health" | grep -q UP; do printf "."; sleep 3; done
   echo " listo"
 fi
 
 echo "3/4 Consola de la prueba en :8090..."
-pgrep -f scripts/consola.py >/dev/null || API_URL="http://localhost:$PORT" nohup python3 scripts/consola.py > "$LOGS/consola.log" 2>&1 &
+pgrep -f scripts/consola.py >/dev/null || API_URL="http://localhost:$PORT" "${BG[@]}" python3 scripts/consola.py > "$LOGS/consola.log" 2>&1 < /dev/null &
 sleep 2
 
 echo "4/4 Todo arriba."
@@ -39,3 +42,7 @@ cat <<TXT
   RabbitMQ: puerto 15672 (guest/guest)
   Logs del servicio: $LOGS/servicio.log
 TXT
+if [ -n "${CODESPACE_NAME:-}" ]; then
+  echo
+  echo "  Consola de la prueba: https://${CODESPACE_NAME}-8090.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}"
+fi

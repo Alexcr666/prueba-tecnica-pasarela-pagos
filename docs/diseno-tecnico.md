@@ -335,7 +335,7 @@ sequenceDiagram
     PS-->>PG: 200 OK
     Note over PS,DB: Procesador del inbox (asíncrono)
     PS->>DB: TX3: lock orden, PENDING → APPROVED, orden PAID, historial, outbox
-    PS->>MQ: Relay publica PaymentApproved (publisher confirm)
+    PS->>MQ: Relay publica PaymentStatusChanged y OrderPaid (publisher confirm)
     PG-->>C: Redirige a return_url
     C->>PS: GET /payments/{id} → estado leído de Oracle
 ```

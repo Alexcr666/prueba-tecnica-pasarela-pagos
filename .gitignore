@@ -5,3 +5,4 @@ target/
 .vscode/
 local/liquidacion/*.csv
 docs/preparacion-defensa.md
+__pycache__/

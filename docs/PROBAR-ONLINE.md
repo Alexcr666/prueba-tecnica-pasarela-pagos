@@ -4,17 +4,17 @@ Todo corre en el navegador: Oracle Free, RabbitMQ, una pasarela de pagos simulad
 
 ## 1. Esperar a que todo arranque
 
-Al abrir el Codespace, el entorno se levanta solo (Oracle, RabbitMQ, la pasarela simulada, el servicio y la consola). Tarda 2 o 3 minutos. Si quieres verlo o relanzarlo, en la terminal:
+Al abrir el Codespace, la terminal ejecuta sola `./scripts/iniciar.sh`, que levanta Oracle, RabbitMQ, la pasarela simulada, el servicio y la consola. La primera vez tarda unos 5 a 8 minutos porque descarga Oracle; las siguientes, 1 o 2.
+
+Termina con **"Todo arriba"** y el enlace de la consola. Si cierras la terminal o algo se detiene, vuelve a lanzarlo (se puede repetir sin problema):
 
 ```bash
 ./scripts/iniciar.sh
 ```
 
-Termina con **"Todo arriba"**. Se puede repetir sin problema.
-
 ## 2. Abrir la consola de la prueba
 
-Pestaña **PORTS** (junto a la terminal) → puerto **8090 · Consola de la prueba** → ícono del globo 🌐.
+Abre el enlace que muestra la terminal al terminar, o ve a la pestaña **PORTS** (junto a la terminal) → puerto **8090 · Consola de la prueba** → ícono del globo 🌐.
 
 La consola recorre con botones los tres escenarios del enunciado. Cada paso explica qué hace y por qué importa, y muestra la petición, la respuesta y el historial guardado en Oracle:
 

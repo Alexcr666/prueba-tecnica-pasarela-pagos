@@ -1,0 +1,1425 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Integración asíncrona con una pasarela de pagos — Diseño técnico</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f2f1ec;--surface:#fff;--ink:#15191e;--muted:#60666d;--rule:#d5d2c8;--rule-2:#e6e3db;--primary:#0d5c4d;--soft:#e2eee9;--sunken:#f7f6f2}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--paper);color:var(--ink);font:14.5px/1.6 "IBM Plex Sans",-apple-system,"Segoe UI",sans-serif}
+.wrap{display:grid;grid-template-columns:260px minmax(0,1fr);max-width:1240px;margin:0 auto}
+nav{position:sticky;top:0;height:100vh;overflow:auto;padding:22px 16px;border-right:1px solid var(--rule)}
+nav b{display:block;font:600 11px "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);margin-bottom:10px}
+nav a{display:block;color:var(--ink);text-decoration:none;font-size:13px;padding:3px 8px;border-left:2px solid transparent}
+nav a.l3{padding-left:20px;color:var(--muted);font-size:12.5px}
+nav a:hover{border-left-color:var(--primary);background:var(--surface)}
+main{padding:26px 40px 80px;min-width:0}
+.doc{background:var(--surface);border:1px solid var(--rule);padding:34px 44px}
+.head{border-bottom:2px solid var(--primary);padding-bottom:14px;margin-bottom:8px}
+.head small{font:600 11px "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--primary)}
+.head h1{font-size:26px;margin:6px 0 0;letter-spacing:-.01em}
+h2{font-size:20px;margin:34px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+h3{font-size:16px;margin:24px 0 8px}
+p,li{color:#22272d} a{color:var(--primary)}
+code{font:12.5px "IBM Plex Mono",monospace;background:var(--sunken);padding:1px 4px;border:1px solid var(--rule-2)}
+pre{background:var(--sunken);border:1px solid var(--rule-2);padding:12px 14px;overflow:auto;font-size:12px;line-height:1.5}
+pre code{background:none;border:0;padding:0}
+.tw{overflow:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font:600 11px "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--sunken);border-bottom:1px solid var(--rule);padding:8px 10px}
+td{border-bottom:1px solid var(--rule-2);padding:8px 10px;vertical-align:top}
+figure{margin:18px 0;border:1px solid var(--rule);background:#fff;padding:14px;text-align:center}
+figure img{max-width:100%;height:auto}
+figcaption{font-size:12.5px;color:var(--muted);margin-top:8px}
+blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid var(--primary);background:var(--soft)}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule)}main{padding:16px}.doc{padding:20px}}
+</style></head><body><div class="wrap"><nav><b>Contenido</b><a class="l2" href="#s1">1. Resumen ejecutivo</a><a class="l2" href="#s2">2. Supuestos y reglas de negocio abiertas</a><a class="l3" href="#s2-1">2.1 Supuestos sobre el proveedor y el entorno</a><a class="l3" href="#s2-2">2.2 Reglas de negocio no especificadas</a><a class="l2" href="#s3">3. Stack tecnológico</a><a class="l2" href="#s4">4. Arquitectura</a><a class="l3" href="#s4-1">4.1 Responsabilidades</a><a class="l3" href="#s4-2">4.2 Decisiones clave</a><a class="l3" href="#s4-3">4.3 Contrato de los eventos publicados</a><a class="l2" href="#s5">5. Máquinas de estado</a><a class="l3" href="#s5-1">5.1 Intento de pago: transiciones permitidas</a><a class="l3" href="#s5-2">5.2 Orden</a><a class="l2" href="#s6">6. Modelo de datos</a><a class="l2" href="#s7">7. Secuencias</a><a class="l3" href="#s7-1">7.1 Flujo exitoso</a><a class="l3" href="#s7-2">7.2 Timeout al crear: UNKNOWN y conciliación</a><a class="l3" href="#s7-3">7.3 Webhook duplicado, concurrente y fuera de orden</a><a class="l2" href="#s8">8. Idempotencia y concurrencia</a><a class="l2" href="#s9">9. Resiliencia y recuperación</a><a class="l3" href="#s9-1">9.1 Timeouts y reintentos</a><a class="l3" href="#s9-2">9.2 Conciliación</a><a class="l3" href="#s9-3">9.3 Matriz de recuperación</a><a class="l2" href="#s10">10. Seguridad</a><a class="l2" href="#s11">11. Observabilidad</a><a class="l2" href="#s12">12. Estrategia de pruebas</a><a class="l2" href="#s13">13. Limitaciones y trabajo futuro</a><a class="l2" href="#s14">14. Herramientas utilizadas</a><a class="l2" href="#anexo-a">Anexo A. DDL (Oracle 19c+)</a><a class="l3" href="#h-a-1-esquema-principal-v1-schema-sql-">A.1 Esquema principal (V1__schema.sql)</a><a class="l3" href="#h-a-2-conciliaci-n-diaria-v2-settlement-sql-">A.2 Conciliación diaria (V2__settlement.sql)</a></nav>
+<main><div class="doc"><div class="head"><small>Documento de diseño técnico</small><h1>Integración asíncrona con una pasarela de pagos — Diseño técnico</h1></div><p>Proceso de selección · Desarrollador Java Senior · Noviembre de 2026</p>
+<h2 id="s1">1. Resumen ejecutivo</h2>
+<p>La propuesta es un <strong>Payment Service</strong> en Java 25 LTS y Spring Boot 4.1. Modela cada intento de pago como una máquina de estados persistida en Oracle. Obtiene el resultado por dos vías independientes, webhook y consulta activa, y <strong>ante la duda nunca crea un segundo cobro</strong>.</p>
+<p>El sistema entrega mensajes <em>al menos una vez</em> y aplica sus efectos de forma idempotente. El resultado neto es que cada efecto de negocio ocurre <strong>exactamente una vez</strong>.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Riesgo del enunciado</th>
+<th>Garantía</th>
+<th>Mecanismo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cobro duplicado</td>
+<td>Un reintento técnico nunca crea un segundo cobro</td>
+<td>El id del intento viaja al proveedor como referencia única. Un índice único permite un solo intento activo por orden.</td>
+</tr>
+<tr>
+<td>Notificación repetida</td>
+<td>Sus efectos se aplican una sola vez</td>
+<td><code>UNIQUE (provider, provider_event_id)</code> en el inbox y transición condicional en la misma transacción</td>
+</tr>
+<tr>
+<td>Notificación fuera de orden</td>
+<td>Un estado nunca retrocede</td>
+<td>Cada transición declara sus estados de origen válidos. Un evento viejo actualiza 0 filas y queda registrado como obsoleto.</td>
+</tr>
+<tr>
+<td>Notificación perdida</td>
+<td>El resultado se obtiene igual</td>
+<td>Conciliación periódica por consulta y conciliación diaria contra la liquidación</td>
+</tr>
+<tr>
+<td>Resultado incierto (timeout)</td>
+<td>Nunca se interpreta como rechazo</td>
+<td>Estado <code>UNKNOWN</code> hasta que el proveedor confirme. Mientras tanto, el cliente no puede abrir otro intento.</td>
+</tr>
+<tr>
+<td>Orden en estado incorrecto</td>
+<td>La orden cambia en la misma transacción que el pago</td>
+<td>Bloqueo de la fila de la orden y actualización condicional de ambos</td>
+</tr>
+<tr>
+<td>Evento interno perdido</td>
+<td>Ningún hecho confirmado deja de publicarse</td>
+<td>Transactional Outbox en la misma transacción que el cambio de estado</td>
+</tr>
+<tr>
+<td>Falta de trazabilidad</td>
+<td>Cada transición es reconstruible</td>
+<td>Historial de solo inserción con origen, evento del proveedor y <code>correlation_id</code></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="s2">2. Supuestos y reglas de negocio abiertas</h2>
+<h3 id="s2-1">2.1 Supuestos sobre el proveedor y el entorno</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Supuesto</th>
+<th>Si no se cumple</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S1</td>
+<td>El pago se completa en una página alojada por el proveedor (redirección). Ningún dato de tarjeta pasa por nuestro sistema.</td>
+<td>Habría que tokenizar en el cliente y ampliar el alcance PCI DSS.</td>
+</tr>
+<tr>
+<td>S2</td>
+<td>El proveedor acepta una referencia única del comercio y permite consultar el pago por ella.</td>
+<td>Un timeout al crear solo se resuelve con el webhook o la liquidación diaria.</td>
+</tr>
+<tr>
+<td>S3</td>
+<td>Si el proveedor admite una clave de idempotencia, se envía el mismo id del intento.</td>
+<td>El diseño no depende de esto: sin ella, nunca se reintenta una creación con resultado incierto.</td>
+</tr>
+<tr>
+<td>S4</td>
+<td>Los webhooks llegan firmados (HMAC-SHA256) y traen un id de evento único.</td>
+<td>Sin id de evento, la clave es el SHA-256 de <code>(provider_payment_id, estado)</code>: repetir el mismo estado no tiene efecto adicional.</td>
+</tr>
+<tr>
+<td>S5</td>
+<td>El proveedor reintenta los webhooks ante una respuesta distinta de 2xx durante al menos 24 h.</td>
+<td>La conciliación cubre la entrega, con más latencia.</td>
+</tr>
+<tr>
+<td>S6</td>
+<td>El proveedor entrega un archivo o API de liquidación diaria.</td>
+<td>La conciliación se limita a consultas individuales.</td>
+</tr>
+<tr>
+<td>S7</td>
+<td>El antifraude lo ejecuta el proveedor; nuestro sistema refleja su resultado.</td>
+<td>Un antifraude propio sería un paso previo a iniciar el pago.</td>
+</tr>
+<tr>
+<td>S8</td>
+<td>Montos en COP, guardados como enteros en la unidad mínima. Una moneda por orden.</td>
+<td>Varias monedas exigen tasa de cambio y redondeo explícitos.</td>
+</tr>
+<tr>
+<td>S9</td>
+<td>Al menos dos instancias sin estado detrás de un balanceador. La alta disponibilidad de Oracle (Data Guard o RAC) la gestiona infraestructura.</td>
+<td>Con una sola instancia el diseño funciona igual, sin tolerancia a la caída de un nodo.</td>
+</tr>
+<tr>
+<td>S10</td>
+<td>Dimensionamiento de referencia, a validar: picos de 50 pagos/s y 150 webhooks/s.</td>
+<td>Se recalibran los timeouts, pools y umbrales de la sección 9.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="s2-2">2.2 Reglas de negocio no especificadas</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Pregunta</th>
+<th>Decisión propuesta</th>
+<th>Impacto si el negocio decide distinto</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td>¿Varios intentos simultáneos por orden?</td>
+<td>No. Máximo un intento activo (<code>CREATED</code>, <code>PENDING</code>, <code>UNKNOWN</code>). Tras un rechazo o expiración se permite uno nuevo.</td>
+<td>Permitirlo elimina el índice de intento activo y exige reembolsar automáticamente los cobros sobrantes.</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>¿Pago aprobado sobre una orden ya pagada, expirada o cancelada?</td>
+<td>El cobro es real y se registra. Una orden expirada o cancelada pasa a <code>REQUIRES_REVIEW</code>. Una orden pagada se mantiene <code>PAID</code>. En ambos casos se emite <code>RefundRequired</code> y una alerta.</td>
+<td>Si el negocio prefiere entregar, la orden expirada pasa a <code>PAID</code>.</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>¿Cuánto dura una orden sin pagar?</td>
+<td>30 min. No expira mientras tenga un intento activo.</td>
+<td>Cambia un parámetro del job de expiración.</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>¿Pagos parciales o montos distintos?</td>
+<td>No. Un monto o moneda distintos son una discrepancia y la orden pasa a <code>REQUIRES_REVIEW</code>.</td>
+<td>Exige un saldo pagado por orden y varios intentos aprobados.</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>¿Cuánto esperar un resultado incierto?</td>
+<td>Consultas con backoff durante 48 h y luego revisión manual. Nunca se marca rechazado sin evidencia.</td>
+<td>Cambia el límite de la conciliación.</td>
+</tr>
+<tr>
+<td>R6</td>
+<td>¿Se puede cancelar una orden con pago en curso?</td>
+<td>No, mientras exista un intento activo.</td>
+<td>Exige cancelar el pago en el proveedor, si lo admite.</td>
+</tr>
+<tr>
+<td>R7</td>
+<td>¿Reembolsos y contracargos?</td>
+<td>Fuera de alcance. Se emite <code>RefundRequired</code> como punto de extensión.</td>
+<td>Requiere un subdominio de reembolsos.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="s3">3. Stack tecnológico</h2>
+<p>Cada pieza se eligió por una propiedad que el problema necesita. Versiones validadas el 20-11-2026.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Capa</th>
+<th>Elección</th>
+<th>Por qué</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lenguaje</td>
+<td>Java 25 LTS (el código compila también con 21)</td>
+<td>Virtual threads para muchas llamadas de I/O concurrentes con código imperativo. Desde JDK 24 (<a href="https://openjdk.org/jeps/491">JEP 491</a>) un virtual thread ya no fija su hilo de plataforma dentro de <code>synchronized</code>, que era el problema con drivers JDBC en Java 21.</td>
+</tr>
+<tr>
+<td>Framework</td>
+<td>Spring Boot 4.1.3</td>
+<td>Último parche de la línea estable, con soporte OSS hasta julio de 2027. La 4.0 pierde soporte el 31-12-2026. La 4.2.0 salió el 19-11-2026; se evaluará tras sus primeros parches. Usa las APIs de Jakarta EE (Servlet, Bean Validation).</td>
+</tr>
+<tr>
+<td>Estilo</td>
+<td>Monolito modular con arquitectura hexagonal</td>
+<td>Orden y pago comparten una transacción ACID. Los microservicios exigirían sagas sin aportar nada a este alcance. Los puertos aíslan al proveedor.</td>
+</tr>
+<tr>
+<td>Base de datos</td>
+<td>Oracle (DDL compatible con 19c)</td>
+<td>Fuente de verdad. Índices únicos sobre expresiones (equivalen a índices parciales), <code>FOR UPDATE SKIP LOCKED</code>, particionamiento por intervalo. 19c tiene soporte Premier hasta 2029.</td>
+</tr>
+<tr>
+<td>Persistencia</td>
+<td>Spring <code>JdbcClient</code> con SQL explícito</td>
+<td>Las transiciones dependen de <code>UPDATE … WHERE status IN (…)</code>, <code>FOR UPDATE SKIP LOCKED</code> e índices sobre expresiones. Con SQL explícito la garantía de concurrencia es visible y comprobable, sin depender de lo que genere un ORM. JPA sería válido para lecturas o pantallas de soporte.</td>
+</tr>
+<tr>
+<td>PL/SQL</td>
+<td>Paquete de conciliación diaria</td>
+<td>Comparación por conjuntos sobre volumen alto, donde están los datos. La lógica transaccional queda en Java.</td>
+</tr>
+<tr>
+<td>Migraciones</td>
+<td>Flyway</td>
+<td>DDL versionado, el mismo en pruebas y producción.</td>
+</tr>
+<tr>
+<td>Mensajería</td>
+<td>RabbitMQ 4.3, quorum queues</td>
+<td>Difunde hechos confirmados a otros sistemas. La 4.3 trae reintentos con retardo nativos en quorum queues y DLQ.</td>
+</tr>
+<tr>
+<td>Consistencia BD ↔ broker</td>
+<td>Transactional Outbox con relay propio</td>
+<td>Evita la escritura doble y el two-phase commit, sin infraestructura adicional.</td>
+</tr>
+<tr>
+<td>Cliente del proveedor</td>
+<td><code>RestClient</code> (HTTP/1.1) y Resilience4j 2.4 (módulos core, configuración programática)</td>
+<td>Un solo mecanismo para timeouts, circuit breaker, bulkhead y reintentos selectivos, con métricas en Micrometer. La configuración en código deja explícito qué se reintenta y qué no. <code>@Retryable</code> de Spring 7 no trae circuit breaker.</td>
+</tr>
+<tr>
+<td>Jobs</td>
+<td><code>@Scheduled</code> y ShedLock</td>
+<td>Un solo nodo ejecuta cada corrida.</td>
+</tr>
+<tr>
+<td>Seguridad</td>
+<td>Spring Security (OAuth2 Resource Server) y HashiCorp Vault</td>
+<td>JWT para la API; firma propia en el webhook; secretos rotables fuera del código.</td>
+</tr>
+<tr>
+<td>Observabilidad</td>
+<td>Logs JSON estructurados, Micrometer, OpenTelemetry (OTLP), Prometheus y Grafana</td>
+<td>Formato y exportadores nativos de Boot 4.</td>
+</tr>
+<tr>
+<td>Pruebas</td>
+<td>JUnit 5, AssertJ, Testcontainers (Oracle Free), WireMock, Awaitility</td>
+<td>Integración contra Oracle real; WireMock simula los fallos del proveedor. Propuestas para la siguiente fase: Testcontainers RabbitMQ, ArchUnit y Gatling (sección 12).</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Descartados:</strong></p>
+<ul>
+<li><strong>Redis:</strong> una segunda fuente de verdad puede desincronizarse; la clave única en la misma transacción es más fuerte.</li>
+<li><strong>Kafka:</strong> no hace falta reprocesar un log ni ese throughput.</li>
+<li><strong>WebFlux:</strong> los virtual threads dan la misma escalabilidad con código más legible.</li>
+<li><strong>Debezium:</strong> más infraestructura de la que este volumen necesita.</li>
+<li><strong>Microservicios:</strong> romperían la atomicidad entre orden y pago.</li>
+</ul>
+<p><strong>Portabilidad a Jakarta EE:</strong></p>
+<ul>
+<li>Spring MVC ↔ JAX-RS</li>
+<li><code>@Transactional</code> ↔ JTA</li>
+<li>RabbitMQ ↔ JMS</li>
+<li>JPA es la misma</li>
+</ul>
+<h2 id="s4">4. Arquitectura</h2>
+<p>Todo cambio de estado se confirma primero en Oracle. RabbitMQ solo difunde hechos ya confirmados.</p>
+<figure><a href="img/01-arquitectura.png" target="_blank"><img src="img/01-arquitectura.png" alt="Figura 1. Arquitectura de componentes del Payment Service."></a><figcaption>Figura 1. Arquitectura de componentes del Payment Service.</figcaption></figure>
+<h3 id="s4-1">4.1 Responsabilidades</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Componente</th>
+<th>Responsabilidad</th>
+<th>No hace</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API REST</td>
+<td>Crea órdenes, inicia intentos de pago y expone su estado. Exige <code>Idempotency-Key</code> en cada POST y JWT en todas las llamadas.</td>
+<td>No llama al proveedor dentro de una transacción abierta.</td>
+</tr>
+<tr>
+<td>Dominio (orden y pago)</td>
+<td>Contiene las máquinas de estado y aplica cada transición con <code>UPDATE</code> condicional. En la misma transacción escribe el historial y el outbox.</td>
+<td>No conoce HTTP ni el formato del proveedor.</td>
+</tr>
+<tr>
+<td>Adaptador del proveedor</td>
+<td>Implementa <code>PaymentProviderPort</code> (crear, consultar). Traduce estados; aplica timeouts, circuit breaker y bulkhead.</td>
+<td>No escribe en la base de datos.</td>
+</tr>
+<tr>
+<td>Receptor de webhooks</td>
+<td>Verifica la firma y la frescura. Guarda en el inbox y responde 200.</td>
+<td>No aplica efectos de negocio; así responde en milisegundos y no pierde eventos.</td>
+</tr>
+<tr>
+<td>Procesador del inbox</td>
+<td>Reclama eventos pendientes con <code>SKIP LOCKED</code> y los aplica al dominio con reintentos.</td>
+<td>No decide por su cuenta: delega en la máquina de estados.</td>
+</tr>
+<tr>
+<td>Conciliación</td>
+<td>Cada 60 s consulta los intentos <code>CREATED</code> antiguos, <code>UNKNOWN</code> y <code>PENDING</code> vencidos. Una vez al día compara la liquidación con PL/SQL.</td>
+<td>No resuelve un caso incierto sin evidencia.</td>
+</tr>
+<tr>
+<td>Relay del outbox</td>
+<td>Publica los eventos confirmados con confirmación del broker y los marca <code>SENT</code>.</td>
+<td>No garantiza entrega única; los consumidores deduplican por <code>message_id</code>.</td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td>Fuente de verdad.</td>
+<td>—</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Entrega eventos a otros sistemas, con reintentos y DLQ.</td>
+<td>No es fuente de verdad.</td>
+</tr>
+<tr>
+<td>Vault</td>
+<td>Credenciales del proveedor, secretos HMAC (dos vigentes durante una rotación) y credenciales de BD.</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="s4-2">4.2 Decisiones clave</h3>
+<ol>
+<li><strong>Dos transacciones cortas alrededor de la llamada al proveedor.</strong> La primera guarda el intento en <code>CREATED</code> y hace commit <em>antes</em> de llamar. Así:
+<ul>
+<li>un webhook que llegue antes que la respuesta ya encuentra el intento por su referencia;</li>
+<li>una caída a mitad de camino deja rastro para la conciliación;</li>
+<li>ninguna conexión ni bloqueo de BD queda retenido durante la llamada HTTP.</li>
+</ul>
+</li>
+<li><strong>El webhook es señal, no la única fuente.</strong> Webhook y consulta activa pasan por la misma máquina de estados: el primero que llega gana y el segundo es un no-op.</li>
+<li><strong>Un mismo patrón de trabajo distribuido.</strong> El inbox, el outbox y la conciliación reclaman trabajo con <code>FOR UPDATE SKIP LOCKED</code> y un <em>lease</em> (<code>next_attempt_at</code>). Si una instancia muere, el lease vence y otra la retoma.</li>
+<li><strong>Instancias sin estado:</strong> todo el estado vive en Oracle, así que el escalado es horizontal.</li>
+</ol>
+<h3 id="s4-3">4.3 Contrato de los eventos publicados</h3>
+<p>Cada evento viaja en un sobre con metadatos, inspirado en CloudEvents. El <code>eventId</code> es también el <code>message_id</code> AMQP y el id de la fila en <code>outbox_event</code>.</p>
+<pre><code class="language-json">{
+  &quot;eventId&quot;: &quot;01a1fa9a-b9a0-7052-87e4-89bc83a47e80&quot;,
+  &quot;eventType&quot;: &quot;PaymentStatusChanged&quot;,
+  &quot;schemaVersion&quot;: 1,
+  &quot;occurredAt&quot;: &quot;2026-11-20T20:16:46.496Z&quot;,
+  &quot;source&quot;: &quot;payment-service&quot;,
+  &quot;correlationId&quot;: &quot;01a1fa9a-b973-79d7-9507-cef950d69536&quot;,
+  &quot;data&quot;: {
+    &quot;payment&quot;:    { &quot;attemptId&quot;: &quot;…&quot;, &quot;orderId&quot;: &quot;…&quot;, &quot;provider&quot;: &quot;DEMO&quot;, &quot;providerPaymentId&quot;: &quot;pay_1&quot; },
+    &quot;amount&quot;:     { &quot;valueMinor&quot;: 150000, &quot;currency&quot;: &quot;COP&quot; },
+    &quot;transition&quot;: { &quot;from&quot;: &quot;PENDING&quot;, &quot;to&quot;: &quot;APPROVED&quot; }
+  }
+}
+</code></pre>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Para qué sirve</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>eventId</code></td>
+<td>El consumidor descarta duplicados (entrega <em>at-least-once</em>).</td>
+</tr>
+<tr>
+<td><code>eventType</code></td>
+<td>También es la <em>routing key</em> del exchange <em>topic</em> <code>payments.events</code>.</td>
+</tr>
+<tr>
+<td><code>schemaVersion</code></td>
+<td>Un cambio incompatible publica la versión 2 sin romper a los consumidores actuales.</td>
+</tr>
+<tr>
+<td><code>occurredAt</code></td>
+<td>Permite al consumidor descartar un evento más viejo que el último que aplicó.</td>
+</tr>
+<tr>
+<td><code>correlationId</code></td>
+<td>Une el evento con la petición HTTP y los logs que lo originaron.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Tipos: <code>PaymentStatusChanged</code>, <code>OrderPaid</code>, <code>RefundRequired</code> y <code>PaymentNeedsReview</code>. Los montos van siempre en unidades mínimas y como enteros.</p>
+<h2 id="s5">5. Máquinas de estado</h2>
+<p>Un intento de pago solo avanza. Un timeout lo lleva a <code>UNKNOWN</code>, nunca a un nuevo cobro.</p>
+<figure><a href="img/02-estados-intento-pago.png" target="_blank"><img src="img/02-estados-intento-pago.png" alt="Figura 2. Máquina de estados del intento de pago."></a><figcaption>Figura 2. Máquina de estados del intento de pago.</figcaption></figure>
+<h3 id="s5-1">5.1 Intento de pago: transiciones permitidas</h3>
+<p>La tabla es la especificación que implementa <code>PaymentStateMachine</code>. Los orígenes de cada fila son exactamente la lista <code>status IN (…)</code> del <code>UPDATE</code> condicional.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Destino</th>
+<th>Orígenes permitidos</th>
+<th>Lo provoca</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PENDING</code></td>
+<td><code>CREATED</code>, <code>UNKNOWN</code></td>
+<td>Creación aceptada, o una consulta que encuentra el pago en curso</td>
+</tr>
+<tr>
+<td><code>UNKNOWN</code></td>
+<td><code>CREATED</code></td>
+<td>Timeout de lectura o 5xx al crear; intento <code>CREATED</code> huérfano de más de 2 min</td>
+</tr>
+<tr>
+<td><code>APPROVED</code></td>
+<td><code>CREATED</code>, <code>PENDING</code>, <code>UNKNOWN</code>, <code>FAILED</code></td>
+<td>Webhook, consulta o liquidación</td>
+</tr>
+<tr>
+<td><code>DECLINED</code></td>
+<td><code>CREATED</code>, <code>PENDING</code>, <code>UNKNOWN</code>, <code>FAILED</code></td>
+<td>Webhook, consulta o rechazo síncrono</td>
+</tr>
+<tr>
+<td><code>EXPIRED</code></td>
+<td><code>CREATED</code>, <code>PENDING</code>, <code>UNKNOWN</code>, <code>FAILED</code></td>
+<td>El proveedor informa que el cliente no completó el pago</td>
+</tr>
+<tr>
+<td><code>FAILED</code></td>
+<td><code>CREATED</code>, <code>UNKNOWN</code></td>
+<td>Error de conexión o 4xx al crear, o referencia no encontrada tras 15 min</td>
+</tr>
+</tbody>
+</table></div>
+<p>Hay dos clases de estado terminal:</p>
+<ul>
+<li><strong>Informados por el proveedor</strong> (<code>APPROVED</code>, <code>DECLINED</code>, <code>EXPIRED</code>). Son definitivos. Un evento que los contradiga queda registrado y genera una alerta crítica.</li>
+<li><strong>Inferido por nosotros</strong> (<code>FAILED</code>). Se basa en la ausencia de evidencia, así que la evidencia del proveedor puede corregirlo.</li>
+</ul>
+<h3 id="s5-2">5.2 Orden</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Estado</th>
+<th>Entra cuando</th>
+<th>Sale a</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AWAITING_PAYMENT</code></td>
+<td>Se crea la orden</td>
+<td><code>PAID</code>, <code>EXPIRED</code>, <code>CANCELLED</code>, <code>REQUIRES_REVIEW</code></td>
+</tr>
+<tr>
+<td><code>PAID</code></td>
+<td>Un intento pasa a <code>APPROVED</code> con el monto y la moneda esperados</td>
+<td>Terminal. Un segundo cobro aprobado emite <code>RefundRequired</code>.</td>
+</tr>
+<tr>
+<td><code>EXPIRED</code></td>
+<td><code>expires_at</code> vencido y sin intento activo</td>
+<td><code>REQUIRES_REVIEW</code> si llega una aprobación tardía</td>
+</tr>
+<tr>
+<td><code>CANCELLED</code></td>
+<td>El cliente cancela sin intento activo</td>
+<td><code>REQUIRES_REVIEW</code> si llega una aprobación tardía</td>
+</tr>
+<tr>
+<td><code>REQUIRES_REVIEW</code></td>
+<td>Aprobación sobre una orden no pagable, o monto distinto</td>
+<td>Resolución manual o reembolso (fuera de alcance)</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="s6">6. Modelo de datos</h2>
+<p>Siete tablas sostienen las garantías. Tres restricciones hacen el trabajo crítico:</p>
+<ul>
+<li>el índice único de intento activo;</li>
+<li>el <code>UNIQUE</code> del inbox;</li>
+<li>la PK de idempotencia.</li>
+</ul>
+<figure><a href="img/03-modelo-datos.png" target="_blank"><img src="img/03-modelo-datos.png" alt="Figura 3. Modelo de datos: entidades principales y relaciones."></a><figcaption>Figura 3. Modelo de datos: entidades principales y relaciones.</figcaption></figure>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Tabla</th>
+<th>Propósito</th>
+<th>Restricciones e índices relevantes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_order</code></td>
+<td>Orden y su estado</td>
+<td><code>CHECK</code> de estado y monto &gt; 0. Índice <code>(status, expires_at)</code> para la expiración.</td>
+</tr>
+<tr>
+<td><code>payment_attempt</code></td>
+<td>Cada intento de cobro. Su <code>id</code> es la referencia enviada al proveedor.</td>
+<td>Único de intento activo por orden. Único de <code>provider_payment_id</code>. Índice <code>(status, next_check_at)</code> para conciliación.</td>
+</tr>
+<tr>
+<td><code>payment_status_history</code></td>
+<td>Auditoría de solo inserción</td>
+<td>Particionada por mes. El usuario de la aplicación solo tiene <code>INSERT</code> y <code>SELECT</code>.</td>
+</tr>
+<tr>
+<td><code>provider_event</code></td>
+<td>Inbox de webhooks</td>
+<td><code>UNIQUE (provider, provider_event_id)</code>. Índice <code>(processing_status, next_attempt_at)</code>.</td>
+</tr>
+<tr>
+<td><code>outbox_event</code></td>
+<td>Eventos por publicar</td>
+<td>Índice <code>(status, next_attempt_at)</code></td>
+</tr>
+<tr>
+<td><code>idempotency_record</code></td>
+<td><code>Idempotency-Key</code> → recurso creado</td>
+<td>La PK impide procesar dos veces; <code>request_hash</code> detecta una clave reutilizada con otro cuerpo (422).</td>
+</tr>
+<tr>
+<td><code>reconciliation_discrepancy</code></td>
+<td>Diferencias halladas</td>
+<td>Índice <code>(resolution, detected_at)</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Convenciones:</strong></p>
+<ul>
+<li><strong>Ids:</strong> UUIDv7 generados en la aplicación. Se envían al proveedor sin una ida extra a la BD y, al ser ordenables por tiempo, no fragmentan el índice.</li>
+<li><strong>Fechas:</strong> <code>TIMESTAMP</code> en UTC. Oracle no admite <code>TIMESTAMP WITH TIME ZONE</code> como clave de particionamiento por intervalo.</li>
+<li><strong>Montos:</strong> <code>NUMBER(19)</code> en la unidad mínima de la moneda.</li>
+</ul>
+<p><strong>Dos detalles propios de Oracle:</strong></p>
+<ul>
+<li><strong>Índice &quot;parcial&quot;.</strong> Oracle no tiene índices parciales, pero no indexa filas cuya clave es enteramente <code>NULL</code>. Un índice único sobre <code>CASE WHEN status IN (…) THEN order_id END</code> cubre solo los intentos activos.</li>
+<li><strong><code>UNIQUE</code> con columnas nulas.</strong> Un <code>UNIQUE (provider, provider_payment_id)</code> normal fallaría: Oracle considera duplicadas dos filas con el mismo <code>provider</code> y <code>provider_payment_id</code> nulo, y los intentos <code>CREATED</code> aún no tienen ese id. Por eso se usa una expresión que excluye las filas con id nulo.</li>
+</ul>
+<p>El DDL completo está en el <strong>Anexo A</strong> (migraciones Flyway <code>V1__schema.sql</code> y <code>V2__settlement.sql</code>).</p>
+<h2 id="s7">7. Secuencias</h2>
+<h3 id="s7-1">7.1 Flujo exitoso</h3>
+<figure><a href="img/04-secuencia-flujo-exitoso.png" target="_blank"><img src="img/04-secuencia-flujo-exitoso.png" alt="Figura 4. Secuencia del flujo exitoso."></a><figcaption>Figura 4. Secuencia del flujo exitoso.</figcaption></figure>
+<p>La redirección de retorno puede llegar antes que el webhook. La página de retorno no confía en sus parámetros: muestra el estado guardado en Oracle y lo consulta periódicamente mientras siga <code>PENDING</code>.</p>
+<h3 id="s7-2">7.2 Timeout al crear: UNKNOWN y conciliación</h3>
+<figure><a href="img/05-secuencia-timeout-unknown.png" target="_blank"><img src="img/05-secuencia-timeout-unknown.png" alt="Figura 5. Secuencia de timeout al crear: estado UNKNOWN y conciliación."></a><figcaption>Figura 5. Secuencia de timeout al crear: estado UNKNOWN y conciliación.</figcaption></figure>
+<h3 id="s7-3">7.3 Webhook duplicado, concurrente y fuera de orden</h3>
+<figure><a href="img/06-secuencia-webhooks.png" target="_blank"><img src="img/06-secuencia-webhooks.png" alt="Figura 6. Webhook duplicado, concurrente y fuera de orden."></a><figcaption>Figura 6. Webhook duplicado, concurrente y fuera de orden.</figcaption></figure>
+<h2 id="s8">8. Idempotencia y concurrencia</h2>
+<p>La idempotencia se aplica en cuatro capas. En todas, la garantía final la da una restricción de Oracle evaluada dentro de la transacción, no una comprobación previa en memoria.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Capa</th>
+<th>Clave</th>
+<th>Dónde se persiste</th>
+<th>Con dos ejecuciones concurrentes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API del cliente</td>
+<td><code>Idempotency-Key</code> + <code>scope</code></td>
+<td><code>idempotency_record</code>, PK <code>(scope, idem_key)</code>, misma TX que crea el recurso</td>
+<td>El segundo <code>INSERT</code> espera y recibe <code>ORA-00001</code>: se devuelve el mismo recurso (mismo id, estado actual). Si el cuerpo es distinto, 422.</td>
+</tr>
+<tr>
+<td>Intento activo</td>
+<td><code>order_id</code> mientras el intento es <code>CREATED</code>/<code>PENDING</code>/<code>UNKNOWN</code></td>
+<td>Índice único <code>ux_attempt_active</code></td>
+<td>Solo un <code>INSERT</code> prospera; el otro recibe 409. Es la barrera contra el doble clic con claves distintas.</td>
+</tr>
+<tr>
+<td>Hacia el proveedor</td>
+<td><code>payment_attempt.id</code> como referencia (y clave de idempotencia si se admite)</td>
+<td>Columna <code>id</code>, con commit antes de la llamada</td>
+<td>Un reintento usa la misma referencia. Un timeout de lectura nunca se reintenta a ciegas: pasa a <code>UNKNOWN</code>.</td>
+</tr>
+<tr>
+<td>Webhooks</td>
+<td><code>(provider, provider_event_id)</code></td>
+<td><code>provider_event</code>, <code>UNIQUE</code></td>
+<td>El segundo <code>INSERT</code> recibe <code>ORA-00001</code> y se responde 200 sin efectos.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Regla de concurrencia única:</strong> toda transacción que modifica una orden o sus intentos <strong>bloquea primero la fila de la orden</strong> (<code>SELECT … FOR UPDATE</code>) y después actúa sobre el intento.</p>
+<ul>
+<li><strong>Serialización por orden.</strong> Dos eventos del mismo pago se aplican uno tras otro, y el segundo ve el estado que dejó el primero. Entre órdenes distintas no hay contención.</li>
+<li><strong>Sin interbloqueos.</strong> El orden de bloqueo es siempre orden → intento. El caso que lo motiva: un webhook aprueba un intento mientras el cliente abre otro. Sin esta regla, el índice de intento activo y la orden se bloquearían en orden inverso (<code>ORA-00060</code>).</li>
+<li><strong>El <code>UPDATE</code> condicional decide.</strong> Si afecta 1 fila, se aplican los efectos. Si afecta 0, el evento era duplicado u obsoleto y se registra como <code>IGNORED_STALE</code>.</li>
+<li><strong>Nunca un bloqueo durante una llamada HTTP.</strong> La conciliación reclama con un lease en una transacción corta, llama al proveedor sin transacción abierta y aplica el resultado en otra transacción.</li>
+<li><strong>Detalles de Oracle:</strong>
+<ul>
+<li>Oracle no permite <code>FETCH FIRST</code> junto con <code>FOR UPDATE</code>: el lote se limita con <code>maxRows</code> del cursor.</li>
+<li>Ante dos <code>UPDATE</code> sobre la misma fila, Oracle reevalúa el <code>WHERE</code> del segundo contra la versión confirmada (<em>write consistency</em>).</li>
+</ul>
+</li>
+</ul>
+<p>La implementación está en <code>PaymentTransitionService</code> del repositorio.</p>
+<h2 id="s9">9. Resiliencia y recuperación</h2>
+<p>Solo se reintenta lo que es seguro reintentar. Lo demás se convierte en un estado explícito que resuelve la conciliación. Las cifras son valores iniciales y se calibran con el SLA del proveedor.</p>
+<h3 id="s9-1">9.1 Timeouts y reintentos</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Operación</th>
+<th>Timeout</th>
+<th>Reintentos</th>
+<th>Al agotarse</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Crear pago (POST)</td>
+<td>Conexión 2 s, respuesta 10 s</td>
+<td>Solo ante un fallo de <em>conexión</em> (la petición no salió): 2 reintentos, 200/400 ms con jitter. Ante un timeout de <em>lectura</em> o 5xx: ninguno.</td>
+<td>Conexión o 4xx: <code>FAILED</code>. Lectura o 5xx: <code>UNKNOWN</code> y respuesta 202.</td>
+</tr>
+<tr>
+<td>Consultar estado (GET)</td>
+<td>Conexión 2 s, respuesta 5 s</td>
+<td>2 reintentos (3 intentos en total), backoff exponencial desde 250 ms con jitter; leer es seguro</td>
+<td>Se reprograma <code>next_check_at</code>.</td>
+</tr>
+<tr>
+<td>Circuit breaker</td>
+<td>Ventana de 100 llamadas; se abre con 50 % de fallos o 50 % de llamadas de más de 5 s</td>
+<td>30 s abierto y 10 llamadas de prueba</td>
+<td>Los nuevos pagos reciben 503 sin crear intento; la conciliación se pausa.</td>
+</tr>
+<tr>
+<td>Bulkhead</td>
+<td>—</td>
+<td>Máximo 100 llamadas concurrentes</td>
+<td>Con virtual threads no hay pool que limite la concurrencia; este límite protege al proveedor.</td>
+</tr>
+<tr>
+<td>Procesador del inbox</td>
+<td>Lease de 60 s</td>
+<td>10 intentos, backoff de 1 s a 10 min</td>
+<td><code>FAILED</code>, alerta y reproceso manual: una DLQ dentro de la BD.</td>
+</tr>
+<tr>
+<td>Relay del outbox</td>
+<td>Confirmación del broker: 5 s</td>
+<td>Ilimitados, backoff hasta 1 min. Se publica como <code>mandatory</code>: un mensaje sin cola de destino vuelve al relay y se reintenta.</td>
+<td>Alerta si el pendiente más antiguo supera 2 min. Nada se descarta.</td>
+</tr>
+<tr>
+<td>Consumidores RabbitMQ</td>
+<td>—</td>
+<td><code>delivery-limit</code> 5 con reintento con retardo nativo</td>
+<td>DLQ, alerta y reenvío manual.</td>
+</tr>
+<tr>
+<td>Conciliación <code>UNKNOWN</code></td>
+<td>—</td>
+<td>A los 30 s, luego 1, 2, 4… min (máx. 30 min entre consultas), durante 48 h</td>
+<td>Alerta crítica y revisión manual (regla R5); nunca se resuelve sin evidencia.</td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td>Sentencia 5 s; Hikari <code>connectionTimeout</code> 3 s</td>
+<td>—</td>
+<td>La API y el webhook responden 503; el proveedor reintenta.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="s9-2">9.2 Conciliación</h3>
+<p><strong>Incremental, cada 60 s</strong> (ShedLock):</p>
+<ol>
+<li>Reclama con <code>SKIP LOCKED</code> y un lease los intentos:
+<ul>
+<li><code>CREATED</code> con más de 2 min (caída entre la llamada y el guardado);</li>
+<li><code>UNKNOWN</code> con <code>next_check_at</code> vencido;</li>
+<li><code>PENDING</code> con más de 15 min (posible webhook perdido).</li>
+</ul>
+</li>
+<li>Consulta al proveedor por la referencia.</li>
+<li>Aplica el resultado con la misma <code>transition(...)</code> que usa el webhook, con origen <code>RECONCILIATION</code>.</li>
+<li>Si la referencia no existe y el intento tiene más de 15 min, lo marca <code>FAILED</code>.</li>
+</ol>
+<p><strong>Diaria, contra la liquidación</strong> (04:30 UTC, sobre el día anterior, un solo nodo con ShedLock):</p>
+<ol>
+<li>El puerto <code>SettlementFilePort</code> obtiene el archivo del día. La implementación incluida lee <code>&lt;PROVEEDOR&gt;_&lt;fecha&gt;.csv</code> del buzón donde el proceso SFTP lo deja. Si el archivo no llegó, la corrida falla y alerta: conciliar contra un archivo vacío marcaría todo como no liquidado.</li>
+<li>Java borra y recarga las líneas del día en <code>settlement_line</code>, en lote. Si una línea está repetida, se revierte la carga completa.</li>
+<li><code>pkg_settlement.compare(p_run_date, p_provider)</code> cruza por conjuntos con <code>payment_attempt</code> y registra en <code>reconciliation_discrepancy</code>:</li>
+</ol>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Tipo</th>
+<th>Significa</th>
+<th>Resolución</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>APPROVED_NOT_HERE</code></td>
+<td>Liquidado como aprobado y aquí no está <code>APPROVED</code> (o no existe)</td>
+<td><strong>Automática</strong> si la máquina de estados lo permite: <code>transition(...)</code> con origen <code>SETTLEMENT</code> y la discrepancia pasa a <code>AUTO_FIXED</code>. Si aquí está <code>DECLINED</code>/<code>EXPIRED</code> o el pago no existe: revisión manual.</td>
+</tr>
+<tr>
+<td><code>NOT_SETTLED</code></td>
+<td><code>APPROVED</code> aquí ese día y sin línea aprobada en la liquidación</td>
+<td>Revisión manual</td>
+</tr>
+<tr>
+<td><code>AMOUNT_MISMATCH</code></td>
+<td>Línea aprobada con monto o moneda distintos</td>
+<td>Revisión manual</td>
+</tr>
+</tbody>
+</table></div>
+<p>La corrida es idempotente: un índice único sobre las discrepancias abiertas impide duplicarlas si el archivo se reenvía. Operaciones puede re-ejecutar un día con <code>POST /admin/settlement/run?date=…</code>, endpoint expuesto solo en la red interna.</p>
+<h3 id="s9-3">9.3 Matriz de recuperación</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Escenario</th>
+<th>Qué queda</th>
+<th>Cómo se recupera</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Caída entre llamar al proveedor y guardar la respuesta</td>
+<td>Intento <code>CREATED</code></td>
+<td>La conciliación lo toma a los 2 min y consulta por referencia.</td>
+</tr>
+<tr>
+<td>Caída mientras se procesa un webhook</td>
+<td>Evento <code>RECEIVED</code> con lease vencido</td>
+<td>Otra instancia lo reprocesa; la transición es idempotente.</td>
+</tr>
+<tr>
+<td>Caída tras publicar y antes de marcar <code>SENT</code></td>
+<td>Evento del outbox <code>NEW</code></td>
+<td>Se republica; los consumidores deduplican por <code>message_id</code>.</td>
+</tr>
+<tr>
+<td>Proveedor caído o lento</td>
+<td>Circuit breaker abierto</td>
+<td>503 rápido a los nuevos pagos; los pendientes se concilian al cerrar el circuito.</td>
+</tr>
+<tr>
+<td>Webhook perdido</td>
+<td><code>PENDING</code> sin avance</td>
+<td>Conciliación a los 15 min; como último recurso, la liquidación diaria.</td>
+</tr>
+<tr>
+<td>Oracle no disponible</td>
+<td>Nada se confirma</td>
+<td>503 y reintento del proveedor. No queda estado a medias.</td>
+</tr>
+<tr>
+<td>RabbitMQ no disponible</td>
+<td>El outbox acumula</td>
+<td>El relay drena sin pérdida al volver el broker.</td>
+</tr>
+<tr>
+<td>Mensaje sin cola de destino</td>
+<td>El broker lo devuelve (<code>mandatory</code>)</td>
+<td>El evento sigue <code>NEW</code> y se reintenta; alerta por <code>payments_outbox_unroutable</code>.</td>
+</tr>
+<tr>
+<td>Mensaje que siempre falla</td>
+<td>—</td>
+<td>DLQ tras 5 entregas y reenvío manual.</td>
+</tr>
+<tr>
+<td>Resultado incierto</td>
+<td><code>UNKNOWN</code>; el cliente no puede abrir otro intento</td>
+<td>Conciliación hasta 48 h y luego revisión manual.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="s10">10. Seguridad</h2>
+<ul>
+<li><strong>Autenticidad e integridad del webhook:</strong>
+<ul>
+<li>HMAC-SHA256 sobre <code>timestamp + &quot;.&quot; + cuerpo crudo</code>, comparado en tiempo constante (<code>MessageDigest.isEqual</code>).</li>
+<li>Se rechaza un timestamp con más de 5 min de desfase (anti-replay). El <code>UNIQUE</code> del inbox cubre la repetición dentro de esa ventana.</li>
+<li>Se aceptan dos secretos vigentes durante una rotación.</li>
+<li>Una firma inválida responde 401, no se persiste e incrementa una métrica.</li>
+<li>Defensa en profundidad: lista de IPs del proveedor si la publica, tamaño máximo del cuerpo de 64 KB y rate limit.</li>
+</ul>
+</li>
+<li><strong>Retorno del cliente:</strong> los parámetros de la URL de retorno no se usan como fuente de estado; podrían manipularse.</li>
+<li><strong>Datos de tarjeta:</strong> nunca pasan por el sistema (página alojada, S1). El alcance PCI DSS se reduce al cuestionario SAQ A.</li>
+<li><strong>Credenciales:</strong> en Vault, nunca en el repositorio, en la configuración ni en los logs. Credenciales de BD dinámicas y usuario de aplicación sin privilegios de DDL.</li>
+<li><strong>Datos personales:</strong>
+<ul>
+<li>El inbox guarda solo una lista blanca de campos del payload.</li>
+<li>Los logs enmascaran correos y documentos.</li>
+<li>Tráfico con TLS 1.2+; cifrado en reposo con Oracle TDE si la licencia lo permite.</li>
+<li>Cumplimiento de la Ley 1581 de 2012 (protección de datos personales).</li>
+</ul>
+</li>
+<li><strong>Integridad de la auditoría:</strong> el historial solo admite <code>INSERT</code>. El usuario de aplicación no tiene <code>UPDATE</code> ni <code>DELETE</code> sobre esa tabla.</li>
+<li><strong>API:</strong> OAuth2/JWT y validación de entrada con Bean Validation.</li>
+</ul>
+<h2 id="s11">11. Observabilidad</h2>
+<p><strong>Logs JSON estructurados:</strong></p>
+<ul>
+<li><strong>Campos siempre presentes:</strong> <code>trace_id</code>, <code>correlation_id</code>, <code>order_id</code>, <code>attempt_id</code>, <code>provider_payment_id</code>, <code>provider_event_id</code>, <code>from_status</code>, <code>to_status</code>, <code>source</code>.</li>
+<li><strong>Nunca se registran:</strong> datos de tarjeta, secretos, cabeceras de firma ni payloads completos.</li>
+<li><strong>Correlación:</strong> el <code>trace_id</code> (W3C <code>traceparent</code>) cubre cada petición. El webhook no trae nuestra traza, así que la unión entre trazas la hace <code>attempt_id</code>, que viaja como referencia de ida y vuelta.</li>
+</ul>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Métrica</th>
+<th>Alerta</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Intentos <code>UNKNOWN</code> y antigüedad del más viejo</td>
+<td>&gt; 15 min: aviso. &gt; 2 h: crítica.</td>
+</tr>
+<tr>
+<td>Antigüedad del evento del outbox más viejo sin enviar</td>
+<td>&gt; 2 min</td>
+</tr>
+<tr>
+<td>Backlog del inbox y eventos <code>FAILED</code></td>
+<td>Backlog &gt; 1.000 o &gt; 5 min; cualquier <code>FAILED</code></td>
+</tr>
+<tr>
+<td>Profundidad de la DLQ</td>
+<td>&gt; 0</td>
+</tr>
+<tr>
+<td>Firmas de webhook inválidas</td>
+<td>&gt; 10 en 5 min (ataque o rotación mal hecha)</td>
+</tr>
+<tr>
+<td>Latencia p99 y errores del proveedor; estado del circuit breaker</td>
+<td>Circuito abierto &gt; 1 min</td>
+</tr>
+<tr>
+<td>Tasa de aprobación</td>
+<td>Caída &gt; 30 % frente a la misma hora de la semana anterior</td>
+</tr>
+<tr>
+<td>Discrepancias de conciliación</td>
+<td>&gt; 0</td>
+</tr>
+<tr>
+<td>Eventos duplicados u obsoletos ignorados</td>
+<td>Informativa</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Reconstruir el ciclo de vida de una transacción:</strong></p>
+<pre><code class="language-sql">SELECT h.occurred_at, h.from_status, h.to_status, h.source,
+       e.provider_event_id, e.event_type, h.correlation_id
+  FROM payment_status_history h
+  LEFT JOIN provider_event e ON e.id = h.provider_event_ref
+ WHERE h.order_id = :orderId
+ ORDER BY h.occurred_at;
+</code></pre>
+<h2 id="s12">12. Estrategia de pruebas</h2>
+<p>La columna <strong>Estado</strong> distingue lo que ya está automatizado en la implementación de referencia (✔) de lo que se propone para la siguiente fase.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Nivel</th>
+<th>Qué valida</th>
+<th>Herramienta</th>
+<th>Casos clave</th>
+<th>Estado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unitarias</td>
+<td>Máquina de estados</td>
+<td>JUnit 5, AssertJ</td>
+<td>Los 49 pares origen → destino de la tabla 5.1, permitidos o rechazados</td>
+<td>✔ <code>PaymentStateMachineTest</code></td>
+</tr>
+<tr>
+<td>Unitarias</td>
+<td>Verificación de firma</td>
+<td>JUnit 5</td>
+<td>Firma válida, cuerpo alterado, timestamp vencido o absurdo, segundo secreto en rotación</td>
+<td>✔ <code>WebhookSignatureVerifierTest</code></td>
+</tr>
+<tr>
+<td>Unitarias</td>
+<td>Clave del inbox</td>
+<td>JUnit 5</td>
+<td>Id del proveedor o hash de (pago, estado) cuando falta (supuesto S4)</td>
+<td>✔ <code>WebhookEventKeyTest</code></td>
+</tr>
+<tr>
+<td>Proveedor simulado</td>
+<td>Políticas de resiliencia</td>
+<td>WireMock</td>
+<td>Éxito; timeout de lectura → <code>UNKNOWN</code> sin reintento; 5xx → <code>UNKNOWN</code>; conexión rechazada → <code>FAILED</code>; 4xx; 409; consulta con reintentos</td>
+<td>✔ <code>HttpPaymentProviderAdapterTest</code></td>
+</tr>
+<tr>
+<td>Integración</td>
+<td>Flujo completo en Oracle real</td>
+<td>Testcontainers (Oracle Free), Flyway</td>
+<td>Webhook aprueba el pago y paga la orden una sola vez</td>
+<td>✔ <code>PaymentFlowIT</code></td>
+</tr>
+<tr>
+<td>Concurrencia</td>
+<td>Exactamente un efecto</td>
+<td><code>CountDownLatch</code>, <code>ExecutorService</code></td>
+<td>Mismo webhook ×2 en paralelo → 1 historial y 1 evento. <code>PENDING</code> y <code>APPROVED</code> cruzados → final <code>APPROVED</code></td>
+<td>✔ <code>PaymentFlowIT</code></td>
+</tr>
+<tr>
+<td>Fuera de orden</td>
+<td>No hay retroceso</td>
+<td>Integración</td>
+<td><code>APPROVED</code> y luego <code>PENDING</code> → sigue <code>APPROVED</code>; el evento queda <code>IGNORED_STALE</code></td>
+<td>✔ <code>PaymentFlowIT</code></td>
+</tr>
+<tr>
+<td>Idempotencia API</td>
+<td>Una sola llamada al proveedor</td>
+<td>Integración + WireMock</td>
+<td>Misma <code>Idempotency-Key</code> dos veces → mismo intento, 1 POST al proveedor</td>
+<td>✔ <code>PaymentFlowIT</code></td>
+</tr>
+<tr>
+<td>Recuperación</td>
+<td>Resultado incierto</td>
+<td>Integración, WireMock, Awaitility</td>
+<td>Timeout → <code>UNKNOWN</code>, segundo intento bloqueado, la conciliación resuelve</td>
+<td>✔ <code>PaymentFlowIT</code></td>
+</tr>
+<tr>
+<td>Monto distinto</td>
+<td>Regla R2</td>
+<td>Integración</td>
+<td>Aprobado con otro monto → orden <code>REQUIRES_REVIEW</code> y discrepancia</td>
+<td>✔ <code>PaymentFlowIT</code></td>
+</tr>
+<tr>
+<td>Conciliación diaria</td>
+<td>PL/SQL <code>pkg_settlement</code></td>
+<td>Integración</td>
+<td>Los 3 tipos de discrepancia, corrección automática e idempotencia</td>
+<td>✔ <code>SettlementIT</code></td>
+</tr>
+<tr>
+<td>Mensajería</td>
+<td>Outbox</td>
+<td>Testcontainers (RabbitMQ)</td>
+<td>Broker caído → el outbox acumula y luego drena; mensaje sin cola → no se marca <code>SENT</code></td>
+<td>Propuesta (verificado a mano con el entorno local)</td>
+</tr>
+<tr>
+<td>Arquitectura</td>
+<td>Límites hexagonales</td>
+<td>ArchUnit</td>
+<td>El dominio no depende de Spring Web ni de los adaptadores</td>
+<td>Propuesta</td>
+</tr>
+<tr>
+<td>Carga</td>
+<td>Webhooks y API</td>
+<td>Gatling</td>
+<td>150 webhooks/s con p99 &lt; 200 ms</td>
+<td>Propuesta</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Total automatizado:</strong> 84 pruebas (73 unitarias y 11 de integración), en verde con <code>./mvnw verify</code>.</p>
+<h2 id="s13">13. Limitaciones y trabajo futuro</h2>
+<ul>
+<li><strong>Reembolsos y contracargos:</strong> fuera de alcance; solo se emite <code>RefundRequired</code>.</li>
+<li><strong>UX con resultado incierto:</strong> mientras un intento está <code>UNKNOWN</code>, el cliente no puede pagar de nuevo, normalmente por segundos o minutos. Es una decisión deliberada para no cobrar dos veces.</li>
+<li><strong>Orden de los eventos en RabbitMQ:</strong> no está garantizado por agregado. Los consumidores usan el estado, <code>occurredAt</code> y <code>schemaVersion</code> del sobre (sección 4.3), no el orden de llegada.</li>
+<li><strong>Usuario de base de datos:</strong> en la implementación de referencia, Flyway migra con el mismo usuario de la aplicación. En producción las migraciones corren en el pipeline con un usuario dueño del esquema y la aplicación solo tiene DML.</li>
+<li><strong>Throughput del inbox:</strong> cada instancia procesa su lote de forma secuencial. Si no alcanza el pico (S10), se paraleliza el lote con virtual threads; la transición idempotente lo permite.</li>
+<li><strong>Tamaño del webhook:</strong> el límite de 64 KB se valida después de leer el cuerpo. En producción el gateway o el balanceador corta antes por <code>Content-Length</code>.</li>
+<li><strong>Carrera con el circuit breaker:</strong> si el circuito se abre entre que se crea el intento y se llama al proveedor, el intento queda <code>FAILED</code> en vez de responder 503 sin crearlo. El cliente puede reintentar con un nuevo intento.</li>
+<li><strong>Un solo proveedor:</strong> el puerto <code>PaymentProviderPort</code> permite añadir otros con enrutamiento.</li>
+<li><strong>Región única:</strong> el RPO y el RTO dependen de la configuración de Oracle Data Guard.</li>
+<li><strong>Licencias:</strong> el particionamiento por intervalo requiere la opción <em>Partitioning</em> de Oracle EE; sin ella, la purga se hace por lotes con PL/SQL.</li>
+<li><strong>Calibración:</strong> las cifras de timeouts y umbrales son iniciales.</li>
+</ul>
+<h2 id="s14">14. Herramientas utilizadas</h2>
+<ul>
+<li><strong>Asistente de IA:</strong> herramienta de apoyo para investigación, validación de versiones, redacción y código. El candidato revisó y validó todo el contenido, y asume y sustenta cada decisión en la defensa técnica.</li>
+<li><strong>Diagramas:</strong> Mermaid.</li>
+<li><strong>Implementación de referencia:</strong> Java 21+/Spring Boot 4.1.3 con el núcleo del diseño: máquina de estados, transición idempotente, inicio de pago con <code>UNKNOWN</code>, webhooks firmados, inbox, outbox con sobre versionado, conciliación incremental y conciliación diaria en PL/SQL con lector de archivo. Incluye 84 pruebas automatizadas (73 unitarias y 11 de integración contra Oracle real con Testcontainers).</li>
+<li><strong>Entorno local y demos:</strong> Docker Compose con Oracle Free, RabbitMQ y una pasarela simulada (WireMock). Tres scripts reproducen los escenarios de este documento contra el servicio real: flujo completo con duplicados y eventos fuera de orden, timeout resuelto por conciliación, y conciliación diaria con los tres tipos de discrepancia. Una consola web recorre esos escenarios paso a paso con botones y muestra cada petición, el historial guardado en Oracle y los eventos publicados en RabbitMQ. El repositorio se puede probar en GitHub Codespaces sin instalar nada.</li>
+</ul>
+<p><strong>Fuentes de versiones:</strong></p>
+<ul>
+<li><a href="https://www.herodevs.com/blog-posts/spring-boot-versions-eol-dates-and-latest-releases-april-2026">Spring Boot: versiones y fechas de soporte</a></li>
+<li><a href="https://openjdk.org/jeps/491">JEP 491</a></li>
+<li><a href="https://www.rabbitmq.com/blog/2026/04/23/rabbitmq-4.3-release">RabbitMQ 4.3</a></li>
+<li><a href="https://github.com/resilience4j/resilience4j/releases">Resilience4j</a></li>
+<li><a href="https://docs.spring.io/spring-framework/reference/core/resilience.html">Spring Framework 7: funciones de resiliencia</a></li>
+<li><a href="https://www.oracle.com/database/ai-native-database-26ai/">Oracle AI Database 26ai</a></li>
+</ul>
+<h2 id="anexo-a">Anexo A. DDL (Oracle 19c+)</h2>
+<h3 id="h-a-1-esquema-principal-v1-schema-sql-">A.1 Esquema principal (<code>V1__schema.sql</code>)</h3>
+<pre><code class="language-sql">-- =====================================================================
+-- Payment Service - esquema inicial (Oracle 19c+)
+-- Convenciones: ids UUIDv7 generados en la aplicación, fechas TIMESTAMP en UTC,
+-- montos NUMBER(19) en la unidad mínima de la moneda.
+-- =====================================================================
+
+-- Orden ---------------------------------------------------------------
+CREATE TABLE customer_order (
+  id            VARCHAR2(36)  PRIMARY KEY,
+  customer_id   VARCHAR2(64)  NOT NULL,
+  amount_minor  NUMBER(19)    NOT NULL CHECK (amount_minor &gt; 0),
+  currency      CHAR(3)       NOT NULL,
+  status        VARCHAR2(20)  NOT NULL CHECK (status IN
+                  ('AWAITING_PAYMENT','PAID','EXPIRED','CANCELLED','REQUIRES_REVIEW')),
+  expires_at    TIMESTAMP     NOT NULL,
+  version       NUMBER(10)    DEFAULT 0 NOT NULL,
+  created_at    TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  updated_at    TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL
+);
+CREATE INDEX ix_order_expiry   ON customer_order (status, expires_at);
+CREATE INDEX ix_order_customer ON customer_order (customer_id, created_at);
+
+-- Intento de pago -----------------------------------------------------
+CREATE TABLE payment_attempt (
+  id                  VARCHAR2(36)  PRIMARY KEY,      -- referencia enviada al proveedor
+  order_id            VARCHAR2(36)  NOT NULL REFERENCES customer_order (id),
+  attempt_no          NUMBER(3)     NOT NULL,
+  provider            VARCHAR2(20)  NOT NULL,
+  provider_payment_id VARCHAR2(64),
+  amount_minor        NUMBER(19)    NOT NULL,
+  currency            CHAR(3)       NOT NULL,
+  status              VARCHAR2(20)  NOT NULL CHECK (status IN
+                        ('CREATED','PENDING','UNKNOWN','APPROVED','DECLINED','EXPIRED','FAILED')),
+  status_reason       VARCHAR2(100),
+  redirect_url        VARCHAR2(1000),
+  check_count         NUMBER(5)     DEFAULT 0 NOT NULL,
+  next_check_at       TIMESTAMP,
+  version             NUMBER(10)    DEFAULT 0 NOT NULL,
+  created_at          TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  updated_at          TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  CONSTRAINT uq_attempt_no UNIQUE (order_id, attempt_no)   -- también indexa la FK
+);
+-- Como máximo un intento activo por orden (regla R1).
+-- Oracle no indexa claves enteramente NULL: el índice solo contiene intentos activos.
+CREATE UNIQUE INDEX ux_attempt_active ON payment_attempt (
+  CASE WHEN status IN ('CREATED','PENDING','UNKNOWN') THEN order_id END);
+-- Id del proveedor único, ignorando los intentos que aún no lo tienen.
+-- Un UNIQUE (provider, provider_payment_id) normal trataría como duplicadas
+-- dos filas con el mismo provider y provider_payment_id NULL.
+CREATE UNIQUE INDEX ux_provider_payment ON payment_attempt (
+  CASE WHEN provider_payment_id IS NOT NULL THEN provider END, provider_payment_id);
+CREATE INDEX ix_attempt_recon ON payment_attempt (status, next_check_at);
+
+-- Historial de transiciones (solo inserción) ---------------------------
+-- En producción: PARTITION BY RANGE (occurred_at) INTERVAL (NUMTOYMINTERVAL(1,'MONTH'))
+-- (requiere la opción Partitioning; se omite aquí para que corra en Oracle Free).
+CREATE TABLE payment_status_history (
+  id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  attempt_id         VARCHAR2(36)  NOT NULL REFERENCES payment_attempt (id),
+  order_id           VARCHAR2(36)  NOT NULL,
+  from_status        VARCHAR2(20),
+  to_status          VARCHAR2(20)  NOT NULL,
+  source             VARCHAR2(20)  NOT NULL CHECK (source IN
+                       ('API','WEBHOOK','RECONCILIATION','SETTLEMENT','MANUAL')),
+  provider_event_ref NUMBER,
+  correlation_id     VARCHAR2(64)  NOT NULL,
+  detail             VARCHAR2(400),
+  occurred_at        TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL
+);
+CREATE INDEX ix_history_attempt ON payment_status_history (attempt_id, occurred_at);
+CREATE INDEX ix_history_order   ON payment_status_history (order_id, occurred_at);
+
+-- Inbox de webhooks ---------------------------------------------------
+CREATE TABLE provider_event (
+  id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  provider            VARCHAR2(20)  NOT NULL,
+  provider_event_id   VARCHAR2(100) NOT NULL,
+  merchant_reference  VARCHAR2(36),
+  provider_payment_id VARCHAR2(64),
+  event_type          VARCHAR2(50)  NOT NULL,
+  reported_status     VARCHAR2(20),
+  reported_amount     NUMBER(19),
+  reported_currency   CHAR(3),
+  payload             CLOB          NOT NULL CHECK (payload IS JSON),
+  processing_status   VARCHAR2(20)  DEFAULT 'RECEIVED' NOT NULL CHECK (processing_status IN
+                        ('RECEIVED','PROCESSED','IGNORED_STALE','FAILED')),
+  attempts            NUMBER(3)     DEFAULT 0 NOT NULL,
+  next_attempt_at     TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  last_error          VARCHAR2(400),
+  received_at         TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  processed_at        TIMESTAMP,
+  CONSTRAINT uq_provider_event UNIQUE (provider, provider_event_id)
+);
+CREATE INDEX ix_event_pending ON provider_event (processing_status, next_attempt_at);
+
+-- Outbox --------------------------------------------------------------
+CREATE TABLE outbox_event (
+  id              VARCHAR2(36)  PRIMARY KEY,           -- message_id en RabbitMQ
+  aggregate_type  VARCHAR2(30)  NOT NULL,
+  aggregate_id    VARCHAR2(36)  NOT NULL,
+  event_type      VARCHAR2(50)  NOT NULL,
+  payload         CLOB          NOT NULL CHECK (payload IS JSON),
+  status          VARCHAR2(10)  DEFAULT 'NEW' NOT NULL CHECK (status IN ('NEW','SENT')),
+  attempts        NUMBER(5)     DEFAULT 0 NOT NULL,
+  next_attempt_at TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  created_at      TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  sent_at         TIMESTAMP
+);
+CREATE INDEX ix_outbox_pending ON outbox_event (status, next_attempt_at);
+
+-- Idempotencia de la API ------------------------------------------------
+CREATE TABLE idempotency_record (
+  scope          VARCHAR2(100) NOT NULL,
+  idem_key       VARCHAR2(100) NOT NULL,
+  request_hash   CHAR(64)      NOT NULL,
+  resource_id    VARCHAR2(36),
+  response_code  NUMBER(3),
+  response_body  CLOB,
+  created_at     TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  expires_at     TIMESTAMP     NOT NULL,
+  CONSTRAINT pk_idempotency PRIMARY KEY (scope, idem_key)
+);
+
+-- Discrepancias de conciliación ------------------------------------------
+CREATE TABLE reconciliation_discrepancy (
+  id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  run_type            VARCHAR2(20)  NOT NULL CHECK (run_type IN ('INCREMENTAL','SETTLEMENT')),
+  attempt_id          VARCHAR2(36),
+  provider_payment_id VARCHAR2(64),
+  our_status          VARCHAR2(20),
+  provider_status     VARCHAR2(20),
+  our_amount          NUMBER(19),
+  provider_amount     NUMBER(19),
+  resolution          VARCHAR2(20)  DEFAULT 'OPEN' NOT NULL CHECK (resolution IN
+                        ('OPEN','AUTO_FIXED','MANUAL_FIXED','ACCEPTED')),
+  detected_at         TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  resolved_at         TIMESTAMP
+);
+CREATE INDEX ix_discrepancy_open ON reconciliation_discrepancy (resolution, detected_at);
+
+-- ShedLock ------------------------------------------------------------
+CREATE TABLE shedlock (
+  name       VARCHAR2(64)  NOT NULL PRIMARY KEY,
+  lock_until TIMESTAMP(3)  NOT NULL,
+  locked_at  TIMESTAMP(3)  NOT NULL,
+  locked_by  VARCHAR2(255) NOT NULL
+);
+</code></pre>
+<h3 id="h-a-2-conciliaci-n-diaria-v2-settlement-sql-">A.2 Conciliación diaria (<code>V2__settlement.sql</code>)</h3>
+<pre><code class="language-sql">-- =====================================================================
+-- Payment Service - conciliación diaria contra la liquidación (sección 9.2)
+-- Compatible con Oracle 19c y Oracle Free 23.
+--
+-- Flyway (parser de Oracle) separa las sentencias SQL por ';' y los bloques
+-- PL/SQL (CREATE PACKAGE / PACKAGE BODY, DECLARE / BEGIN) por una línea que
+-- contiene solo '/'. Dentro de los bloques PL/SQL no debe haber ninguna línea
+-- que empiece por '/'.
+-- =====================================================================
+
+-- Staging de la liquidación ----------------------------------------------
+-- Java carga aquí el archivo del día (borra y recarga run_date + provider en
+-- la misma transacción, así que recargar un archivo corregido es seguro).
+CREATE TABLE settlement_line (
+  run_date            DATE          NOT NULL,
+  provider            VARCHAR2(20)  NOT NULL,
+  provider_payment_id VARCHAR2(64)  NOT NULL,
+  merchant_reference  VARCHAR2(36),                 -- nuestro attempt_id, si el proveedor lo devuelve
+  status              VARCHAR2(20)  NOT NULL,       -- ya traducido a nuestro vocabulario (APPROVED, DECLINED...)
+  amount_minor        NUMBER(19)    NOT NULL,
+  currency            CHAR(3)       NOT NULL,
+  loaded_at           TIMESTAMP     DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+  CONSTRAINT pk_settlement_line PRIMARY KEY (run_date, provider, provider_payment_id)
+);
+-- Búsqueda de &quot;aprobado aquí y no liquidado&quot; por nuestra referencia.
+CREATE INDEX ix_settlement_reference ON settlement_line (run_date, provider, merchant_reference);
+
+-- Intentos aprobados en un día (caso &quot;aprobado aquí y no liquidado&quot;).
+CREATE INDEX ix_attempt_status_updated ON payment_attempt (status, updated_at);
+
+-- Discrepancias: tipo y datos de la liquidación ---------------------------
+-- Columnas opcionales: las discrepancias INCREMENTAL existentes no las usan.
+ALTER TABLE reconciliation_discrepancy ADD (
+  discrepancy_type  VARCHAR2(30) CONSTRAINT ck_discrepancy_type CHECK (discrepancy_type IN
+                      ('APPROVED_NOT_HERE','NOT_SETTLED','AMOUNT_MISMATCH')),
+  settlement_date   DATE,
+  provider          VARCHAR2(20),
+  our_currency      CHAR(3),
+  provider_currency CHAR(3)
+);
+ALTER TABLE reconciliation_discrepancy ADD CONSTRAINT ck_settlement_discrepancy CHECK (
+  run_type &lt;&gt; 'SETTLEMENT'
+  OR (discrepancy_type IS NOT NULL AND settlement_date IS NOT NULL AND provider IS NOT NULL));
+
+-- Como máximo una discrepancia OPEN igual por (tipo, proveedor, día, pago).
+-- El pago se identifica por el id del proveedor o, si no lo hay, por nuestro attempt_id.
+-- Solo indexa discrepancias SETTLEMENT abiertas (Oracle no indexa claves enteramente NULL):
+-- al resolverse salen del índice. Es la red de seguridad del NOT EXISTS de pkg_settlement.
+CREATE UNIQUE INDEX ux_discrepancy_settlement_open ON reconciliation_discrepancy (
+  CASE WHEN run_type = 'SETTLEMENT' AND resolution = 'OPEN' THEN discrepancy_type END,
+  CASE WHEN run_type = 'SETTLEMENT' AND resolution = 'OPEN' THEN provider END,
+  CASE WHEN run_type = 'SETTLEMENT' AND resolution = 'OPEN' THEN settlement_date END,
+  CASE WHEN run_type = 'SETTLEMENT' AND resolution = 'OPEN' THEN NVL(provider_payment_id, attempt_id) END);
+
+-- Cruce línea de liquidación -&gt; intento --------------------------------------
+-- Primero por nuestra referencia (PK del intento); si no viene o no existe, por el id
+-- del proveedor. La condición sobre provider_payment_id replica la expresión del índice
+-- UX_PROVIDER_PAYMENT para que el optimizador pueda usarlo.
+CREATE OR REPLACE VIEW v_settlement_match AS
+SELECT sl.run_date,
+       sl.provider,
+       sl.provider_payment_id,
+       sl.merchant_reference,
+       sl.status       AS provider_status,
+       sl.amount_minor AS provider_amount,
+       sl.currency     AS provider_currency,
+       pa.id           AS attempt_id,
+       pa.status       AS our_status,
+       pa.amount_minor AS our_amount,
+       pa.currency     AS our_currency
+  FROM settlement_line sl
+  LEFT JOIN payment_attempt by_ref
+         ON by_ref.id = sl.merchant_reference
+        AND by_ref.provider = sl.provider
+  LEFT JOIN payment_attempt by_ppid
+         ON CASE WHEN by_ppid.provider_payment_id IS NOT NULL THEN by_ppid.provider END = sl.provider
+        AND by_ppid.provider_payment_id = sl.provider_payment_id
+  LEFT JOIN payment_attempt pa
+         ON pa.id = NVL(by_ref.id, by_ppid.id);
+
+-- Paquete de comparación ------------------------------------------------------
+CREATE OR REPLACE PACKAGE pkg_settlement AS
+  -- Tipos de discrepancia (columna reconciliation_discrepancy.discrepancy_type).
+  c_approved_not_here CONSTANT VARCHAR2(30) := 'APPROVED_NOT_HERE';
+  c_not_settled       CONSTANT VARCHAR2(30) := 'NOT_SETTLED';
+  c_amount_mismatch   CONSTANT VARCHAR2(30) := 'AMOUNT_MISMATCH';
+
+  -- Cruza por conjuntos settlement_line (run_date, provider) contra payment_attempt e
+  -- inserta en reconciliation_discrepancy (run_type = 'SETTLEMENT'):
+  --   APPROVED_NOT_HERE: aprobado en la liquidación y no APPROVED aquí (o desconocido aquí);
+  --   NOT_SETTLED:       APPROVED aquí ese día (updated_at) y sin línea APPROVED en la liquidación;
+  --   AMOUNT_MISMATCH:   línea aprobada con monto o moneda distintos a los del intento.
+  -- Idempotente: no inserta si ya hay una discrepancia OPEN igual. No hace COMMIT:
+  -- la transacción la controla quien llama.
+  PROCEDURE compare(p_run_date IN DATE, p_provider IN VARCHAR2);
+END pkg_settlement;
+/
+
+CREATE OR REPLACE PACKAGE BODY pkg_settlement AS
+
+  PROCEDURE compare(p_run_date IN DATE, p_provider IN VARCHAR2) IS
+    v_day  DATE;
+    v_from TIMESTAMP;
+    v_to   TIMESTAMP;
+  BEGIN
+    IF p_run_date IS NULL OR p_provider IS NULL THEN
+      RAISE_APPLICATION_ERROR(-20010, 'pkg_settlement.compare: p_run_date y p_provider son obligatorios');
+    END IF;
+    v_day  := TRUNC(p_run_date);
+    v_from := CAST(v_day AS TIMESTAMP);       -- updated_at está en UTC
+    v_to   := CAST(v_day + 1 AS TIMESTAMP);
+
+    -- (a) Aprobado en la liquidación y no APPROVED aquí -----------------------
+    INSERT INTO reconciliation_discrepancy
+      (run_type, discrepancy_type, settlement_date, provider, attempt_id, provider_payment_id,
+       our_status, provider_status, our_amount, provider_amount, our_currency, provider_currency)
+    SELECT 'SETTLEMENT', c_approved_not_here, v_day, m.provider, m.attempt_id, m.provider_payment_id,
+           m.our_status, m.provider_status, m.our_amount, m.provider_amount, m.our_currency, m.provider_currency
+      FROM v_settlement_match m
+     WHERE m.run_date = v_day
+       AND m.provider = p_provider
+       AND m.provider_status = 'APPROVED'
+       AND (m.our_status IS NULL OR m.our_status &lt;&gt; 'APPROVED')
+       AND NOT EXISTS (
+             SELECT 1
+               FROM reconciliation_discrepancy d
+              WHERE d.run_type = 'SETTLEMENT'
+                AND d.resolution = 'OPEN'
+                AND d.discrepancy_type = c_approved_not_here
+                AND d.provider = m.provider
+                AND d.settlement_date = v_day
+                AND NVL(d.provider_payment_id, d.attempt_id) = m.provider_payment_id);
+
+    -- (b) APPROVED aquí ese día y sin línea APPROVED en la liquidación ---------
+    -- provider_status queda NULL si el pago no aparece, o con el estado informado
+    -- (p. ej. DECLINED) si aparece pero no aprobado.
+    INSERT INTO reconciliation_discrepancy
+      (run_type, discrepancy_type, settlement_date, provider, attempt_id, provider_payment_id,
+       our_status, provider_status, our_amount, provider_amount, our_currency, provider_currency)
+    SELECT 'SETTLEMENT', c_not_settled, v_day, pa.provider, pa.id, pa.provider_payment_id,
+           pa.status,
+           (SELECT MAX(sl.status)
+              FROM settlement_line sl
+             WHERE sl.run_date = v_day
+               AND sl.provider = pa.provider
+               AND (sl.merchant_reference = pa.id OR sl.provider_payment_id = pa.provider_payment_id)),
+           pa.amount_minor, NULL, pa.currency, NULL
+      FROM payment_attempt pa
+     WHERE pa.status = 'APPROVED'
+       AND pa.provider = p_provider
+       AND pa.updated_at &gt;= v_from
+       AND pa.updated_at &lt;  v_to
+       AND NOT EXISTS (
+             SELECT 1
+               FROM settlement_line sl
+              WHERE sl.run_date = v_day
+                AND sl.provider = pa.provider
+                AND sl.merchant_reference = pa.id
+                AND sl.status = 'APPROVED')
+       AND NOT EXISTS (
+             SELECT 1
+               FROM settlement_line sl
+              WHERE sl.run_date = v_day
+                AND sl.provider = pa.provider
+                AND sl.provider_payment_id = pa.provider_payment_id
+                AND sl.status = 'APPROVED')
+       AND NOT EXISTS (
+             SELECT 1
+               FROM reconciliation_discrepancy d
+              WHERE d.run_type = 'SETTLEMENT'
+                AND d.resolution = 'OPEN'
+                AND d.discrepancy_type = c_not_settled
+                AND d.provider = pa.provider
+                AND d.settlement_date = v_day
+                AND NVL(d.provider_payment_id, d.attempt_id) = NVL(pa.provider_payment_id, pa.id));
+
+    -- (c) Diferencia de monto o moneda en una línea aprobada -------------------
+    INSERT INTO reconciliation_discrepancy
+      (run_type, discrepancy_type, settlement_date, provider, attempt_id, provider_payment_id,
+       our_status, provider_status, our_amount, provider_amount, our_currency, provider_currency)
+    SELECT 'SETTLEMENT', c_amount_mismatch, v_day, m.provider, m.attempt_id, m.provider_payment_id,
+           m.our_status, m.provider_status, m.our_amount, m.provider_amount, m.our_currency, m.provider_currency
+      FROM v_settlement_match m
+     WHERE m.run_date = v_day
+       AND m.provider = p_provider
+       AND m.provider_status = 'APPROVED'
+       AND m.attempt_id IS NOT NULL
+       AND (m.provider_amount &lt;&gt; m.our_amount OR m.provider_currency &lt;&gt; m.our_currency)
+       AND NOT EXISTS (
+             SELECT 1
+               FROM reconciliation_discrepancy d
+              WHERE d.run_type = 'SETTLEMENT'
+                AND d.resolution = 'OPEN'
+                AND d.discrepancy_type = c_amount_mismatch
+                AND d.provider = m.provider
+                AND d.settlement_date = v_day
+                AND NVL(d.provider_payment_id, d.attempt_id) = m.provider_payment_id);
+  END compare;
+
+END pkg_settlement;
+/
+
+-- Oracle crea un paquete con errores de compilación como INVALID y solo devuelve un
+-- aviso, que Flyway no trata como fallo. Se comprueba aquí para que la migración falle
+-- en el despliegue y no en la primera llamada.
+DECLARE
+  v_errors VARCHAR2(4000);
+BEGIN
+  SELECT LISTAGG(type || ' ' || line || ':' || position || ' ' || SUBSTR(text, 1, 200), ' | ')
+           WITHIN GROUP (ORDER BY type, sequence)
+    INTO v_errors
+    FROM user_errors
+   WHERE name = 'PKG_SETTLEMENT'
+     AND attribute = 'ERROR'
+     AND ROWNUM &lt;= 10;
+  IF v_errors IS NOT NULL THEN
+    RAISE_APPLICATION_ERROR(-20001, SUBSTR('pkg_settlement no compila: ' || v_errors, 1, 2000));
+  END IF;
+END;
+/
+</code></pre>
+</div></main></div></body></html>

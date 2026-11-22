@@ -18,13 +18,19 @@ import hmac
 import json
 import os
 import pathlib
+import threading
 import time
+import uuid
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PAGE = ROOT / "scripts" / "consola" / "index.html"
+DOCS = (ROOT / "docs" / "entrega").resolve()
+DOC_TYPES = {".html": "text/html", ".png": "image/png", ".pdf": "application/pdf",
+             ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
 API_URL = os.environ.get("API_URL", os.environ.get("API", "http://localhost:8080")).rstrip("/")
 PASARELA_URL = os.environ.get("PASARELA_URL", "http://localhost:8089").rstrip("/")
 RABBIT_API = os.environ.get("RABBIT_API", "http://localhost:15672/api").rstrip("/")
@@ -57,9 +63,9 @@ def http(method, url, body=None, headers=None, timeout=30):
     return status, parsed, ms
 
 
-def rabbit(method, path, body=None):
+def rabbit(method, path, body=None, timeout=15):
     return http(method, RABBIT_API + path, body,
-                {"Authorization": RABBIT_AUTH, "content-type": "application/json"}, timeout=5)
+                {"Authorization": RABBIT_AUTH, "content-type": "application/json"}, timeout=timeout)
 
 
 def ensure_queue():
@@ -70,15 +76,54 @@ def ensure_queue():
 
 # --- acciones ------------------------------------------------------------------
 
+JOBS = {}
+JOBS_LOCK = threading.Lock()
+
+
 def call_service(req):
-    """Reenvía una petición al servicio de pagos. Solo rutas relativas: no es un proxy abierto."""
+    """Reenvía una petición al servicio de pagos. Solo rutas relativas: no es un proxy abierto.
+
+    Con "async": true la llamada corre en segundo plano y se devuelve un id de trabajo: las
+    llamadas largas (el timeout de 10 s) no dependen de que un proxy intermedio, como el de
+    Codespaces, mantenga abierta la conexión del navegador.
+    """
     path = req.get("path", "")
     if not path.startswith("/") or path.startswith("//"):
         return 400, {"error": "ruta inválida"}
     headers = {"content-type": "application/json"}
     headers.update({k: v for k, v in (req.get("headers") or {}).items() if k.lower() == "idempotency-key"})
-    status, body, ms = http(req.get("method", "GET"), API_URL + path, req.get("body"), headers, timeout=40)
-    return 200, {"status": status, "body": body, "ms": ms}
+
+    def run():
+        status, body, ms = http(req.get("method", "GET"), API_URL + path, req.get("body"), headers, timeout=40)
+        return {"status": status, "body": body, "ms": ms}
+
+    if not req.get("async"):
+        return 200, run()
+    job = uuid.uuid4().hex
+    with JOBS_LOCK:
+        JOBS[job] = None
+
+    def work():
+        try:
+            result = run()
+        except (urllib.error.URLError, OSError) as e:
+            result = {"error": f"No hay conexión: {e}"}
+        with JOBS_LOCK:
+            JOBS[job] = result
+    threading.Thread(target=work, daemon=True).start()
+    return 200, {"job": job}
+
+
+def job_status(query):
+    job = urllib.parse.parse_qs(query).get("id", [""])[0]
+    with JOBS_LOCK:
+        if job not in JOBS:
+            return 404, {"error": "trabajo desconocido"}
+        result = JOBS[job]
+        if result is None:
+            return 200, {"done": False}
+        del JOBS[job]
+    return 200, {"done": True, "result": result}
 
 
 def send_webhook(req):
@@ -149,6 +194,33 @@ def purge(_req):
     return 200, {"ok": True}
 
 
+METRIC_PREFIXES = ("payments_", "resilience4j_circuitbreaker_state", "http_server_requests_seconds_count",
+                   "http_server_requests_seconds_sum", "hikaricp_connections_active", "jvm_threads_live")
+
+
+def metrics(_req=None):
+    """Métricas del servicio (Prometheus) relevantes para la prueba, como lista {name, labels, value}."""
+    req = urllib.request.Request(API_URL + "/actuator/prometheus")
+    with urllib.request.urlopen(req, timeout=5) as r:
+        text = r.read().decode()
+    out = []
+    for line in text.splitlines():
+        if not line.startswith(METRIC_PREFIXES):
+            continue
+        head, _, value = line.rpartition(" ")
+        name, _, raw = head.partition("{")
+        labels = {}
+        for part in raw.rstrip("}").split('",'):
+            if "=" in part:
+                k, _, v = part.partition("=")
+                labels[k.strip(",")] = v.strip('"')
+        try:
+            out.append({"name": name, "labels": labels, "value": float(value)})
+        except ValueError:
+            continue
+    return 200, {"metrics": out}
+
+
 def health(_req=None):
     def up(fn):
         try:
@@ -156,7 +228,7 @@ def health(_req=None):
         except (urllib.error.URLError, OSError, ValueError):
             return False
     service = up(lambda: http("GET", API_URL + "/actuator/health", timeout=3)[1].get("status") == "UP")
-    broker = up(lambda: rabbit("GET", "/overview")[0] == 200)
+    broker = up(lambda: rabbit("GET", "/overview", timeout=5)[0] == 200)
     gateway = up(lambda: http("GET", PASARELA_URL + "/__admin/health", timeout=3)[0] == 200)
     return 200, {"service": service, "broker": broker, "gateway": gateway, "apiUrl": API_URL}
 
@@ -164,6 +236,7 @@ def health(_req=None):
 ROUTES = {
     ("GET", "/api/health"): health,
     ("GET", "/api/events"): events,
+    ("GET", "/api/metrics"): metrics,
     ("POST", "/api/service"): call_service,
     ("POST", "/api/webhook"): send_webhook,
     ("POST", "/api/gateway/slow"): gateway_slow,
@@ -178,14 +251,19 @@ class Handler(BaseHTTPRequestHandler):
         data = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(code)
         self.send_header("content-type", ctype + "; charset=utf-8")
+        self.send_header("content-length", str(len(data)))
         self.send_header("cache-control", "no-store")
         self.end_headers()
         self.wfile.write(data)
 
     def _route(self, method):
-        path = self.path.split("?")[0]
+        path, _, query = self.path.partition("?")
+        if method == "GET" and path == "/api/job":
+            return self._send(*job_status(query))
         if method == "GET" and path in ("/", "/index.html"):
             return self._send(200, PAGE.read_bytes(), "text/html")
+        if method == "GET" and path.startswith("/doc/"):
+            return self._doc(path[len("/doc/"):])
         handler = ROUTES.get((method, path))
         if handler is None:
             return self._send(404, {"error": "no encontrado"})
@@ -198,6 +276,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send(502, {"error": f"No hay conexión: {e}"})
         except (KeyError, ValueError) as e:
             self._send(400, {"error": f"Petición inválida: {e}"})
+
+    def _doc(self, rel):
+        """Documento de diseño y sus imágenes. Solo archivos de docs/entrega con extensión conocida."""
+        target = (DOCS / urllib.parse.unquote(rel)).resolve()
+        ctype = DOC_TYPES.get(target.suffix.lower())
+        if ctype is None or not target.is_relative_to(DOCS) or not target.is_file():
+            return self._send(404, {"error": "no encontrado"})
+        data = target.read_bytes()
+        self.send_response(200)
+        self.send_header("content-type", ctype)
+        self.send_header("content-length", str(len(data)))
+        if target.suffix.lower() in (".pdf", ".docx"):
+            self.send_header("content-disposition", f'attachment; filename="{target.name}"')
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_GET(self):
         self._route("GET")
