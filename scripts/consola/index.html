@@ -273,6 +273,8 @@ const getHistory = id => api('/api/service', {method: 'GET', path: '/payments/' 
 const pass = (msg, extra) => ({ok: true, msg, extra});
 const fail = (msg, extra) => ({ok: false, msg, extra});
 const ORDER = {customerId: 'cliente-demo', amountMinor: 150000, currency: 'COP'};
+// El escenario de timeout usa otro monto: la demora de la pasarela solo aplica a ese monto.
+const ORDER_TIMEOUT = {...ORDER, amountMinor: 175000};
 
 /* ================================================================ escenarios */
 const SCENARIOS = [
@@ -386,14 +388,15 @@ const SCENARIOS = [
      what: 'La pasarela simulada pasa a tardar 15 segundos en crear pagos.',
      why: '<b>Por qué importa:</b> el antifraude de una pasarela real puede tardar; el servicio corta a los 10 s de lectura.',
      async run(ctx, io) {
-       const r = await io.tool('/api/gateway/slow', {}, 'Pasarela simulada: demora de 15 s');
-       return r.status === 201 || r.status === 200 ? pass('La pasarela ahora tarda 15 s en responder.') : fail('No se pudo configurar la pasarela.');
+       const r = await io.tool('/api/gateway/slow', {amount: ORDER_TIMEOUT.amountMinor}, 'Pasarela simulada: demora de 15 s');
+       ctx.slowId = r.mappingId;
+       return r.status === 201 || r.status === 200 ? pass('La pasarela ahora tarda 15 s en responder a los pagos de este escenario.') : fail('No se pudo configurar la pasarela.');
      }},
     {title: 'Crear la orden', expect: 'HTTP 201',
-     what: 'Una orden nueva de $150.000 COP.', why: '<b>Por qué importa:</b> se parte de un estado limpio.',
+     what: 'Una orden nueva de $175.000 COP.', why: '<b>Por qué importa:</b> se parte de un estado limpio.',
      async run(ctx, io) {
        ctx.key = 'timeout-' + uid();
-       const r = await io.svc('POST', '/orders', ORDER, ctx.key, 'Crear orden');
+       const r = await io.svc('POST', '/orders', ORDER_TIMEOUT, ctx.key, 'Crear orden');
        ctx.orderId = r.body?.id; track(ctx, {label: 'Pago', orderId: ctx.orderId});
        return r.status === 201 ? pass(`Orden ${short(ctx.orderId)} creada.`) : fail('Se esperaba 201.');
      }},
@@ -423,7 +426,7 @@ const SCENARIOS = [
      what: 'Se quita la demora. Al consultar por la referencia, la pasarela informa que el pago sí se aprobó.',
      why: '<b>Por qué importa:</b> la referencia enviada es el id del intento; con ella siempre se puede preguntar qué pasó.',
      async run(ctx, io) {
-       await io.tool('/api/gateway/reset', {}, 'Pasarela simulada: sin demora');
+       await io.tool('/api/gateway/reset', {mappingId: ctx.slowId, reference: ctx.attemptId, amount: ORDER_TIMEOUT.amountMinor}, 'Pasarela simulada: sin demora');
        return pass('Pasarela restablecida.');
      }},
     {title: 'Esperar a la conciliación', expect: 'UNKNOWN → APPROVED · orden PAID (≈ 1-2 min)',

@@ -143,18 +143,38 @@ def send_webhook(req):
                  "status": status, "body": resp, "ms": ms}
 
 
-def gateway_slow(_req):
-    mapping = {"priority": 1, "request": {"method": "POST", "url": "/v1/payments"},
+def gateway_slow(req):
+    """La pasarela simulada tarda 15 s, solo para los pagos del monto indicado.
+
+    Así el escenario de timeout no afecta a otros escenarios ni a otras personas que usen la
+    consola al mismo tiempo.
+    """
+    amount = int(req.get("amount", 175000))
+    mapping = {"priority": 1,
+               "request": {"method": "POST", "url": "/v1/payments",
+                           "bodyPatterns": [{"matchesJsonPath": {"expression": "$.amount", "equalTo": str(amount)}}]},
                "response": {"status": 201, "fixedDelayMilliseconds": 15000,
                             "headers": {"Content-Type": "application/json"},
                             "body": "{\"id\":\"pay-lento\",\"status\":\"PENDING\"}"}}
-    status, _, _ = http("POST", PASARELA_URL + "/__admin/mappings", mapping, {"content-type": "application/json"})
-    return 200, {"status": status, "delayMs": 15000}
+    status, body, _ = http("POST", PASARELA_URL + "/__admin/mappings", mapping, {"content-type": "application/json"})
+    return 200, {"status": status, "delayMs": 15000, "amount": amount, "mappingId": (body or {}).get("id")}
 
 
-def gateway_reset(_req):
-    status, _, _ = http("POST", PASARELA_URL + "/__admin/mappings/reset")
-    return 200, {"status": status}
+def gateway_reset(req):
+    """Quita la demora creada por gateway_slow y, si se indica, deja a la pasarela respondiendo
+    APPROVED con el monto real cuando la conciliación consulte por esa referencia."""
+    if req.get("mappingId"):
+        http("DELETE", f"{PASARELA_URL}/__admin/mappings/{req['mappingId']}")
+    if req.get("reference"):
+        lookup = {"priority": 1,
+                  "request": {"method": "GET", "urlPath": "/v1/payments",
+                              "queryParameters": {"reference": {"equalTo": req["reference"]}}},
+                  "response": {"status": 200, "headers": {"Content-Type": "application/json"},
+                               "jsonBody": {"id": "pay-" + req["reference"][-10:], "reference": req["reference"],
+                                            "status": "APPROVED", "amount": int(req.get("amount", 150000)),
+                                            "currency": "COP"}}}
+        http("POST", PASARELA_URL + "/__admin/mappings", lookup, {"content-type": "application/json"})
+    return 200, {"status": 200}
 
 
 def write_settlement(req):
