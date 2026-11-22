@@ -1,0 +1,6 @@
+{
+  "name": "pasarela-pagos-lanzador",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=18"}
+}
